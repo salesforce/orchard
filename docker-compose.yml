@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  ws:
+    image: realstraw/sbt
+    working_dir: /orchard/ws
+    volumes:
+      - ./:/orchard/ws
+    environment:
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
+      AWS_REGION: "${ORCHARD_AWS_REGION}"
+      ORCHARD_AWS_LOGGING_URI: "${ORCHARD_AWS_LOGGING_URI}"
+    ports:
+      - 9001:9000
+    command:
+      sbt orchardWS/run
+  db:
+    image: postgres
+    volumes:
+      - orchard-postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: "${ORCHARD_PG_SECRET}"
+
+volumes:
+  orchard-postgres-data:

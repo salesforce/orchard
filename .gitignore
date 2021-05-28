@@ -1,0 +1,21 @@
+target/
+.idea
+
+# Vim stuff
+*.swp
+*.swo
+
+# ctags
+.tags
+
+# Mac stuff
+.DS_Store
+
+# Eclipse cruft
+.classpath
+.project
+.settings/
+.cache
+classes/
+
+*.log

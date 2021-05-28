@@ -1,0 +1,80 @@
+# Scala CircleCI 2.0 configuration file
+# See: https://circleci.com/docs/2.0/sample-config/
+version: 2
+
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
+jobs:
+  build:
+    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
+    docker:
+      # specify the version you desire here
+      - image: cimg/openjdk:8.0
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    environment:
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
+
+    # Add steps to the job
+    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+    steps:
+      - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "build.sbt" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run: cat /dev/null | sbt test:compile
+
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies--{{ checksum "build.sbt" }}
+
+      # run tests!
+      - run: cat /dev/null | sbt test:test
+      - run: cat /dev/null | sbt dist
+      - run: mkdir -p workspace
+      - run: cp orchard-ws/target/universal/*.zip workspace/.
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - orchard-ws-*.zip
+
+  publish:
+    docker:
+      - image: circleci/golang:latest
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/workspace
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            go install github.com/tcnksm/ghr@latest
+            VERSION=${VERSION:-v$(grep 'ThisBuild / version :=' version.sbt | awk -F\" '{print $2}')-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)}
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ~/workspace/
+
+workflows:
+  version: 2
+  build_and_publish:
+    jobs:
+      - build
+      - publish:
+          requires:
+            - build
+          filters:
+            branches:
+              only: release
