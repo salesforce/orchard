@@ -117,7 +117,7 @@ object ActivityAttempt {
 
             result match {
               case Left(exp) =>
-                ps.ctx.log.error(s"ActivityAttempt ${ps.ctx.self} exption in creating task", exp)
+                ps.ctx.log.error(s"ActivityAttempt ${ps.ctx.self} exception in creating task", exp)
                 ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
                 terminate(ps, Status.Failed)
               case Right((activityIO, attemptSpec)) =>
