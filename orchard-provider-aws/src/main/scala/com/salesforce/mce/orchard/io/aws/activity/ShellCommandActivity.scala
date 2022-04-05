@@ -5,14 +5,18 @@ import java.time.temporal.ChronoUnit
 import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
 import scala.util.Try
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsResult, JsValue, Json, Reads}
+import play.api.libs.json.{JsResult, JsValue, Json}
 import software.amazon.awssdk.services.ssm.model.SendCommandRequest
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
 
 case class ShellCommandActivity(
   name: String,
-  cmd: ShellCommandActivity.Command,
+  lines: Seq[String],
+  outputS3BucketName: String,
+  outputS3KeyPrefix: String,
+  executionTimeout: Int,
+  deliveryTimeout: Int,
   ec2InstanceId: String
 ) extends Ec2Activity(name, ec2InstanceId) {
 
@@ -25,15 +29,15 @@ case class ShellCommandActivity(
   override def create(): Either[Throwable, JsValue] = Try {
 
     logger.debug(
-      s"create: name=$name ec2InstanceId=$ec2InstanceId cmd lines=${cmd.lines.mkString(" ")}."
+      s"create: name=$name ec2InstanceId=$ec2InstanceId cmd lines=${lines.mkString(" ")}."
     )
-    cmd.lines.foreach(c => logger.debug(s"create command=$c"))
+    lines.foreach(c => logger.debug(s"create command=$c"))
 
     lazy val ts = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES)
     val client = Client.ssm()
     val paraMap = Map(
-      "commands" -> cmd.lines.asJava,
-      "executionTimeout" -> List(cmd.executionTimeout.toString).asJava
+      "commands" -> lines.asJava,
+      "executionTimeout" -> List(executionTimeout.toString).asJava
     )
     val request =
       SendCommandRequest
@@ -42,9 +46,9 @@ case class ShellCommandActivity(
         .instanceIds(ec2InstanceId)
         .comment(getComment(getClass))
         .parameters(paraMap.asJava)
-        .timeoutSeconds(cmd.deliveryTimeout)
-        .outputS3BucketName(cmd.outputS3BucketName)
-        .outputS3KeyPrefix(s"${cmd.outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
+        .timeoutSeconds(deliveryTimeout)
+        .outputS3BucketName(outputS3BucketName)
+        .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
         .build()
     val response = client.sendCommand(request)
     client.close()
@@ -56,29 +60,30 @@ case class ShellCommandActivity(
   }.toEither
 
   override def toString: String = {
-    s"ShellCommandActivity: $name command=$cmd.  ${super.toString}"
+    s"ShellCommandActivity: $name lines=$lines outputS3BucketName=$outputS3BucketName " +
+      s"outputS3KeyPrefix=$outputS3KeyPrefix executionTimeout=$executionTimeout deliveryTimeout=$deliveryTimeout.  " +
+      s"${super.toString}"
   }
 }
 
 object ShellCommandActivity {
-  case class Command(
-    lines: Seq[String],
-    outputS3BucketName: String,
-    outputS3KeyPrefix: String,
-    executionTimeout: Int = 3600,
-    deliveryTimeout: Int = 600
-  )
-
-  implicit val cmdReads: Reads[Command] = Json.reads[Command]
 
   def decode(conf: ActivityIO.Conf): JsResult[ShellCommandActivity] = {
     for {
-      cmd <- (conf.activitySpec \ "command").validate[ShellCommandActivity.Command]
+      lines <- (conf.activitySpec \ "lines").validate[Seq[String]]
+      outputS3BucketName <- (conf.activitySpec \ "outputS3BucketName").validate[String]
+      outputS3KeyPrefix <- (conf.activitySpec \ "outputS3KeyPrefix").validate[String]
+      executionTimeout <- (conf.activitySpec \ "executionTimeout").validate[Int]
+      deliveryTimeout <- (conf.activitySpec \ "deliveryTimeout").validate[Int]
       ec2InstanceId <- (conf.resourceInstSpec \ "ec2InstanceId").validate[String]
     } yield {
       ShellCommandActivity(
         s"${conf.workflowId}_act-${conf.activityId}_${conf.attemptId}",
-        cmd,
+        lines,
+        outputS3BucketName,
+        outputS3KeyPrefix,
+        executionTimeout,
+        deliveryTimeout,
         ec2InstanceId
       )
     }

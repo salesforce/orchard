@@ -5,14 +5,19 @@ import java.time.temporal.ChronoUnit
 import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
 import scala.util.Try
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsResult, JsValue, Json, Reads}
+import play.api.libs.json.{JsResult, JsValue, Json}
 import software.amazon.awssdk.services.ssm.model.SendCommandRequest
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
 
 case class ShellScriptActivity(
   name: String,
-  script: ShellScriptActivity.Script,
+  scriptLocation: String,
+  args: Seq[String],
+  outputS3BucketName: String,
+  outputS3KeyPrefix: String,
+  executionTimeout: Int,
+  deliveryTimeout: Int,
   ec2InstanceId: String
 ) extends Ec2Activity(name, ec2InstanceId) {
 
@@ -24,14 +29,16 @@ case class ShellScriptActivity(
    */
   override def create(): Either[Throwable, JsValue] = Try {
 
-    logger.debug(s"create: name=$name ec2InstanceId=$ec2InstanceId script=$script")
+    logger.debug(
+      s"create: name=$name ec2InstanceId=$ec2InstanceId scriptLocation=$scriptLocation args=$args"
+    )
 
     lazy val ts = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES)
     val preRunInfo = s"cd ~ "
-    val pullScript = s"aws s3 cp ${script.scriptLocation} . "
-    val scriptFile = script.scriptLocation.split("/").last
+    val pullScript = s"aws s3 cp $scriptLocation . "
+    val scriptFile = scriptLocation.split("/").last
     val chmodScript = s"chmod +x ./$scriptFile"
-    val runScript = s" ./$scriptFile ${script.args.mkString(" ")}"
+    val runScript = s" ./$scriptFile ${args.mkString(" ")}"
     val commands =
       List(preRunInfo, s"echo $pullScript", pullScript, chmodScript, s"echo $runScript", runScript)
     commands.foreach(c => logger.debug(s"create: command=$c"))
@@ -39,7 +46,7 @@ case class ShellScriptActivity(
     val client = Client.ssm()
     val paraMap = Map(
       "commands" -> commands.asJava,
-      "executionTimeout" -> List(script.executionTimeout.toString).asJava
+      "executionTimeout" -> List(executionTimeout.toString).asJava
     )
     val request =
       SendCommandRequest
@@ -48,9 +55,9 @@ case class ShellScriptActivity(
         .instanceIds(ec2InstanceId)
         .comment(getComment(getClass))
         .parameters(paraMap.asJava)
-        .timeoutSeconds(script.deliveryTimeout)
-        .outputS3BucketName(script.outputS3BucketName)
-        .outputS3KeyPrefix(s"${script.outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
+        .timeoutSeconds(deliveryTimeout)
+        .outputS3BucketName(outputS3BucketName)
+        .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
         .build()
     val response = client.sendCommand(request)
     client.close()
@@ -62,31 +69,33 @@ case class ShellScriptActivity(
   }.toEither
 
   override def toString: String = {
-    s"ShellScriptActivity: $name script=$script.  ${super.toString}"
+    s"ShellScriptActivity: $name scriptLocation=$scriptLocation args=$args outputS3BucketName=$outputS3BucketName " +
+      s"outputS3KeyPrefix=$outputS3KeyPrefix executionTimeout=$executionTimeout deliveryTimeout=$deliveryTimeout.  " +
+      s"${super.toString}"
   }
 
 }
 
 object ShellScriptActivity {
-  case class Script(
-    scriptLocation: String,
-    args: Seq[String],
-    outputS3BucketName: String,
-    outputS3KeyPrefix: String,
-    executionTimeout: Int = 3600,
-    deliveryTimeout: Int = 600
-  )
-
-  implicit val scriptReads: Reads[Script] = Json.reads[Script]
 
   def decode(conf: ActivityIO.Conf): JsResult[ShellScriptActivity] = {
     for {
-      script <- (conf.activitySpec \ "script").validate[ShellScriptActivity.Script]
+      scriptLocation <- (conf.activitySpec \ "scriptLocation").validate[String]
+      args <- (conf.activitySpec \ "args").validate[Seq[String]]
+      outputS3BucketName <- (conf.activitySpec \ "outputS3BucketName").validate[String]
+      outputS3KeyPrefix <- (conf.activitySpec \ "outputS3KeyPrefix").validate[String]
+      executionTimeout <- (conf.activitySpec \ "executionTimeout").validate[Int]
+      deliveryTimeout <- (conf.activitySpec \ "deliveryTimeout").validate[Int]
       ec2InstanceId <- (conf.resourceInstSpec \ "ec2InstanceId").validate[String]
     } yield {
       ShellScriptActivity(
         s"${conf.workflowId}_act-${conf.activityId}_${conf.attemptId}",
-        script,
+        scriptLocation,
+        args,
+        outputS3BucketName,
+        outputS3KeyPrefix,
+        executionTimeout,
+        deliveryTimeout,
         ec2InstanceId
       )
     }
