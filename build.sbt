@@ -4,7 +4,17 @@ val akkaVersion = "2.6.14"
 val playJsonVersion = "2.8.1"
 val awsVersion = "2.17.+"
 
-val scalaTestArtifact = "org.scalatest" %% "scalatest" % "3.2.9" % Test
+val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
+val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
+val awsSsm            = "software.amazon.awssdk"     % "ssm"                      % awsVersion
+val slick             =  "com.typesafe.slick"       %% "slick"                    % slickVersion
+val slickHikaricp     =  "com.typesafe.slick"       %% "slick-hikaricp"           % slickVersion
+val postgresql        =  "org.postgresql"            % "postgresql"               % "42.2.21"
+val playJson          =  "com.typesafe.play"        %% "play-json"                % playJsonVersion
+val akkaActor         =  "com.typesafe.akka"        %% "akka-actor-typed"         % akkaVersion
+val akkaTestkit       =  "com.typesafe.akka"        %% "akka-actor-testkit-typed" % akkaVersion % Test
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.9" % Test
+val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
@@ -35,12 +45,12 @@ lazy val orchardCore = (project in file("orchard-core")).
   settings(
     name := "orchard-core",
     libraryDependencies ++= Seq(
-      "com.typesafe.slick" %% "slick" % slickVersion,
-      "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
-      "org.postgresql" % "postgresql" % "42.2.21",
-      "com.typesafe.play" %% "play-json" % playJsonVersion,
-      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test
+      slick,
+      slickHikaricp,
+      postgresql,
+      playJson,
+      akkaActor,
+      akkaTestkit
     )
   )
 
@@ -53,7 +63,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
     buildInfoPackage := "com.salesforce.mce.orchard.ws",
     libraryDependencies ++= Seq(
       guice,
-      "org.scalatestplus.play" %% "scalatestplus-play" % "5.1.0" % Test
+      scalaPlusPlay
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
@@ -63,7 +73,9 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
   settings(
     name := "orchard-provider-aws",
     libraryDependencies ++= Seq(
-      "software.amazon.awssdk" % "emr" % awsVersion
+      awsEc2,
+      awsEmr,
+      awsSsm
     )
   ).
   dependsOn(orchardCore)
