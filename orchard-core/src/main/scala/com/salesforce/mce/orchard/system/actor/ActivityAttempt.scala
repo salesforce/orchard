@@ -94,11 +94,14 @@ object ActivityAttempt {
   ): Behavior[Msg] =
     Behaviors.receiveMessage {
       case Cancel =>
+        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Cancel")
         val sts = Status.Canceled
         ps.database.sync(ps.query.setTerminated(sts, ""))
         terminate(ps, sts)
       case ResourceInstSpec(specEither) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received ResourceInstSpec($specEither)")
         specEither match {
+          // resource is up, with valid instance spec, start the activity
           case Right(spec) =>
             val result = for {
               activityIO <- ActivityIO(
@@ -126,10 +129,12 @@ object ActivityAttempt {
                 running(ps, activityIO, attemptSpec)
             }
 
+          // Resource not ready yet
           case Left(Status.Pending) =>
             ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
             Behaviors.same
 
+          // Resource down for unknown reason, cancel the activity?
           case Left(_) =>
             val sts = Status.Canceled
             ps.database.sync(ps.query.setTerminated(sts, ""))
@@ -137,6 +142,7 @@ object ActivityAttempt {
 
         }
       case CheckProgress =>
+        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CheckProgress")
         resourceMgr ! ResourceMgr.GetResourceInstSpec(ps.rscInstSpecAdapter)
         Behaviors.same
     }
@@ -144,16 +150,18 @@ object ActivityAttempt {
   def running(ps: Params, activityIO: ActivityIO, attemptSpec: JsValue): Behavior[Msg] =
     Behaviors.receiveMessage {
       case Cancel =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
         val sts = activityIO.terminate(attemptSpec).getOrElse(Status.Failed)
         ps.database.sync(ps.query.setTerminated(sts, ""))
         terminate(ps, sts)
       case ResourceInstSpec(spec) =>
         ps.ctx.log.error(
-          s"${ps.ctx.self} received unexpected ResourceInstSpec($spec) during running state"
+          s"${ps.ctx.self} (running) received unexpected ResourceInstSpec($spec) during running state"
         )
         ps.database.sync(ps.query.setTerminated(Status.Failed, "Internal Error"))
         terminate(ps, Status.Failed)
       case CheckProgress =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received CheckProgress")
         activityIO.getProgress(attemptSpec) match {
           case Left(exp) =>
             val errorMessage = s"Failed getting attempt progress $exp"

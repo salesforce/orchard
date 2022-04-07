@@ -99,7 +99,7 @@ object ActivityMgr {
               ps.activityType,
               ps.activitySpec
             ),
-            s"${ps.workflowId}-act-${ps.activityId}-at-${attmptId}"
+            s"attempt-${attmptId}"
           )
           running(ps, attmptId, attmpt)
         }
@@ -116,6 +116,7 @@ object ActivityMgr {
 
   private def idle(ps: Params): Behavior[Msg] = Behaviors.receiveMessage {
     case Start =>
+      ps.ctx.log.info(s"${ps.ctx.self} (idle) received Start")
       ps.database.sync(ps.activityQuery.setRunning())
       val attmptId = 1
       val attempt = ps.ctx.spawn(
@@ -129,21 +130,21 @@ object ActivityMgr {
           ps.activityType,
           ps.activitySpec
         ),
-        s"${ps.workflowId}-act-${ps.activityId}-at-${attmptId}"
+        s"attempt-${attmptId}"
       )
       running(ps, attmptId, attempt)
     case CascadeFail =>
+      ps.ctx.log.info(s"${ps.ctx.self} (idle) received CascadeFail")
       val sts = Status.CascadeFailed
       ps.database.sync(ps.activityQuery.setTerminated(sts))
       terminate(ps, sts)
     case Cancel =>
+      ps.ctx.log.info(s"${ps.ctx.self} (idle) received Cancel")
       val sts = Status.Canceled
       ps.database.sync(ps.activityQuery.setTerminated(sts))
       terminate(ps, sts)
     case AttemptFinished(sts) =>
-      ps.ctx.log.error(
-        s"${ps.workflowId}-act-${ps.activityId} received attempt finished ($sts) status in idle state"
-      )
+      ps.ctx.log.error(s"${ps.ctx.self} (idle) received unexpected AttemptFinished($sts)")
       terminate(ps, sts)
   }
 
@@ -153,23 +154,24 @@ object ActivityMgr {
     attempt: ActorRef[ActivityAttempt.Msg]
   ): Behavior[Msg] = Behaviors.receiveMessage {
     case Start =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received Start")
       Behaviors.same
     case CascadeFail =>
-      val sts = Status.CascadeFailed
-      ps.ctx.log.error(
-        s"${ps.workflowId}-act-${ps.activityId} received attempt finished ($sts) status in idle state"
-      )
+      ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected CascadeFail")
       attempt ! ActivityAttempt.Cancel
       Behaviors.same
     case Cancel =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
       attempt ! ActivityAttempt.Cancel
       Behaviors.same
     case AttemptFinished(
           sts @ (Status.Finished | Status.Canceled | Status.Timeout | Status.CascadeFailed)
         ) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
       ps.database.sync(ps.activityQuery.setTerminated(sts))
       terminate(ps, sts)
     case AttemptFinished(sts @ Status.Failed) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
       if (attemptId < ps.maxAttempt) {
         val newAttmptId = attemptId + 1
         val newAttempt = ps.ctx.spawn(
@@ -183,7 +185,7 @@ object ActivityMgr {
             ps.activityType,
             ps.activitySpec
           ),
-          s"${ps.workflowId}-act-${ps.activityId}-at-${newAttmptId}"
+          s"attempt-${newAttmptId}"
         )
         running(ps, newAttmptId, newAttempt)
       } else {
@@ -191,9 +193,7 @@ object ActivityMgr {
         terminate(ps, sts)
       }
     case AttemptFinished(sts) =>
-      ps.ctx.log.error(
-        s"${ps.workflowId}-act-${ps.activityId} received unexpected AttemptFinished($sts) status in idle state"
-      )
+      ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected AttemptFinished($sts)")
       terminate(ps, sts)
   }
 

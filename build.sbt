@@ -1,7 +1,7 @@
 val slickVersion = "3.3.3"
-val akkaVersion = "2.6.14"
+val akkaVersion = "2.6.19"
 // make sure this is the same as the playWS's dependency
-val playJsonVersion = "2.8.1"
+val playJsonVersion = "2.9.2"
 val awsVersion = "2.17.+"
 
 val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
@@ -9,16 +9,16 @@ val awsEmr            = "software.amazon.awssdk"     % "emr"                    
 val awsSsm            = "software.amazon.awssdk"     % "ssm"                      % awsVersion
 val slick             =  "com.typesafe.slick"       %% "slick"                    % slickVersion
 val slickHikaricp     =  "com.typesafe.slick"       %% "slick-hikaricp"           % slickVersion
-val postgresql        =  "org.postgresql"            % "postgresql"               % "42.2.21"
+val postgresql        =  "org.postgresql"            % "postgresql"               % "42.3.3"
 val playJson          =  "com.typesafe.play"        %% "play-json"                % playJsonVersion
 val akkaActor         =  "com.typesafe.akka"        %% "akka-actor-typed"         % akkaVersion
 val akkaTestkit       =  "com.typesafe.akka"        %% "akka-actor-testkit-typed" % akkaVersion % Test
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.9" % Test
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.11" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  scalaVersion := "2.13.6",
+  scalaVersion := "2.13.8",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(

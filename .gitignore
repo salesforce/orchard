@@ -19,3 +19,6 @@ target/
 classes/
 
 *.log
+
+# local envs
+.env
