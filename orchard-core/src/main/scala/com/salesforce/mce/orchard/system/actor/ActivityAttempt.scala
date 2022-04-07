@@ -101,7 +101,7 @@ object ActivityAttempt {
       case ResourceInstSpec(specEither) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received ResourceInstSpec($specEither)")
         specEither match {
-          // resource is up, with valid instance spec, start the adtivity
+          // resource is up, with valid instance spec, start the activity
           case Right(spec) =>
             val result = for {
               activityIO <- ActivityIO(
