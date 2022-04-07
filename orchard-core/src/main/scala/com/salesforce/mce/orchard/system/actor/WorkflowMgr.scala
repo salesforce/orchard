@@ -53,7 +53,7 @@ object WorkflowMgr {
     val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
       rscId -> ctx.spawn(
         ResourceMgr(database, ctx.self, workflowId, rscId),
-        s"$workflowId-rsc-$rscId"
+        s"rsc-$rscId"
       )
     }.toMap
 
@@ -81,6 +81,7 @@ object WorkflowMgr {
   ): Behavior[Msg] = Behaviors.receiveMessage[Msg] {
 
     case ActivityCompleted(activityId, actStatus) =>
+      ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
       val nextStatus = if (actStatus != Status.Finished) Status.Failed else ps.status
 
       val newGraph = ps.activityGraph.removeVertex(activityId)
@@ -108,6 +109,7 @@ object WorkflowMgr {
       else active(ctx, database, newState)
 
     case ResourceTerminated(resourceId, rscStatus) =>
+      ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
       val newResourceMgrs = ps.resourceMgrs - resourceId
       for {
         (actId, rscId) <- ps.activityResources
@@ -121,7 +123,7 @@ object WorkflowMgr {
       else active(ctx, database, newState)
 
   } receiveSignal { case (c, PostStop) =>
-    c.log.info(s"WorkflowMgr ${c.self} actor ${ps.workflowId} stopped")
+    c.log.info(s"${c.self} stopped")
     Behaviors.same
   }
 
@@ -138,7 +140,7 @@ object WorkflowMgr {
       val rscMgr = ps.resourceMgrs(ps.activityResources(actId))
       val actMgr = ctx.spawn(
         ActivityMgr(ctx.self, database, ps.workflowId, actId, rscMgr),
-        s"${ps.workflowId}-act-$actId"
+        s"act-$actId"
       )
       val activityMsg = lastActStatus match {
         case Status.Canceled => ActivityMgr.Cancel

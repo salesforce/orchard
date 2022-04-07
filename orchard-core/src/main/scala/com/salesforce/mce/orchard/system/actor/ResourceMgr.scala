@@ -107,6 +107,7 @@ object ResourceMgr {
   ): Behavior[Msg] = Behaviors.receiveMessage {
 
     case GetResourceInstSpec(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (idle) received GetResourceInstSpec($replyTo)")
       ps.database.sync(ps.resourceQuery.setRun())
       val instId = 1
       spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
@@ -121,11 +122,12 @@ object ResourceMgr {
 
     case ResourceInstanceFinished(status) =>
       ps.ctx.log.error(
-        s"Unexpected message ResourceInstanceFinished($status) recieved in idle state"
+        s"${ps.ctx.self} (idle) received unexpected ResourceInstanceFinished($status)"
       )
       Behaviors.stopped
 
     case Shutdown(status) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (idle) received Shutdown($status)")
       ps.database.sync(ps.resourceQuery.setTerminated(status))
       terminate(ps, status)
 
@@ -137,12 +139,19 @@ object ResourceMgr {
     instId: Int
   ): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
       resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
       Behaviors.same
+    // resource should not receive finished status during "running" state, so we will keep the
+    // resource manager up.
     case ResourceInstanceFinished(Status.Finished) =>
+      ps.ctx.log.info(
+        s"${ps.ctx.self} (running) received ResourceInstanceFinished(Status.Finished)"
+      )
       ps.database.sync(ps.resourceQuery.setTerminated(Status.Finished))
       finished(ps, Status.Finished)
     case ResourceInstanceFinished(failureStatus) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished($failureStatus)")
       if (instId >= ps.maxAttempt) {
         ps.database.sync(ps.resourceQuery.setTerminated(failureStatus))
         finished(ps, failureStatus)
@@ -157,6 +166,7 @@ object ResourceMgr {
         }
       }
     case Shutdown(status) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
       resourceInst ! ResourceInstance.Shutdown(status)
       terminating(ps.ctx, ps, status)
   }
@@ -166,12 +176,16 @@ object ResourceMgr {
     status: Status.Value
   ): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (finished) received GetResourceInstSpec($replyTo)")
       replyTo ! ResourceInstSpecRsp(Left(status))
       Behaviors.same
     case ResourceInstanceFinished(sts) =>
-      ps.ctx.log.error(s"Getting instance finished status ($sts) in finished state")
+      ps.ctx.log.error(
+        s"${ps.ctx.self} (finished) received unexpected ResourceInstanceFinished($sts)"
+      )
       Behaviors.same
     case Shutdown(_) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (finished) received Shutdown(_)")
       terminate(ps, status)
   }
 
@@ -181,9 +195,11 @@ object ResourceMgr {
     status: Status.Value
   ): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (terminating) received GetResourceInstSpec(${replyTo})")
       replyTo ! ResourceInstSpecRsp(Left(status))
       Behaviors.same
     case ResourceInstanceFinished(_) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished(_)")
       ps.database.sync(ps.resourceQuery.setTerminated(status))
       terminate(ps, status)
     case Shutdown(_) =>
@@ -194,7 +210,7 @@ object ResourceMgr {
     ps: Params,
     status: Status.Value
   ): Behavior[Msg] = {
-    ps.ctx.log.info(s"ResourceMgr ${ps.workflowId}-rsc-${ps.resourceId} stopped")
+    ps.ctx.log.info(s"ResourceMgr ${ps.ctx.self} stopped")
     ps.workflowMgr ! WorkflowMgr.ResourceTerminated(ps.resourceId, status)
     Behaviors.stopped
   }
@@ -220,7 +236,7 @@ object ResourceMgr {
             instId,
             resourceIO
           ),
-          s"${ps.workflowId}-rsc-${ps.resourceId}-inst-$instId"
+          s"inst-$instId"
         )
         Right(rscInst)
       case JsError(errors) =>
