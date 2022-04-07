@@ -38,7 +38,7 @@ lazy val root = (project in file(".")).
       // Add your dependencies here
     )
   ).
-  aggregate(orchardCore, orchardWS, orchardTR)
+  aggregate(orchardCore, orchardWS, orchardProviderAWS)
 
 lazy val orchardCore = (project in file("orchard-core")).
   settings(commonSettings: _*).
@@ -79,11 +79,3 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
     )
   ).
   dependsOn(orchardCore)
-
-lazy val orchardTR = (project in file ("orchard-tr")).
-  settings(commonSettings: _*).
-  settings(
-    name := "orchard-tr",
-    libraryDependencies ++= Seq(
-    )
-  )
