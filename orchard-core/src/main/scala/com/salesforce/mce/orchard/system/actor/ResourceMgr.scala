@@ -23,6 +23,11 @@ object ResourceMgr {
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
   case class ResourceInstSpecRsp(spec: Either[Status.Value, JsValue])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
+  case class InactiveResourceInstance(
+    instanceId: Int,
+    status: Status.Value,
+    replyTo: ActorRef[ResourceInstSpecRsp]
+  ) extends Msg
   // the shutdown call from WorkflowMgr, ResourceMgr should never shutdown unless told by WFMgr
   case class Shutdown(status: Status.Value) extends Msg
 
@@ -120,11 +125,15 @@ object ResourceMgr {
           running(ps, rscInst, instId)
       }
 
-    case ResourceInstanceFinished(status) =>
-      ps.ctx.log.error(
-        s"${ps.ctx.self} (idle) received unexpected ResourceInstanceFinished($status)"
-      )
-      Behaviors.stopped
+    // no resource instance should exist yet, this is unexpected
+    case msg: ResourceInstanceFinished =>
+      ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
+      Behaviors.unhandled
+
+    // no resource instance should exist yet, this is unexpected
+    case msg: InactiveResourceInstance =>
+      ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
+      Behaviors.unhandled
 
     case Shutdown(status) =>
       ps.ctx.log.info(s"${ps.ctx.self} (idle) received Shutdown($status)")
@@ -136,32 +145,43 @@ object ResourceMgr {
   def running(
     ps: Params,
     resourceInst: ActorRef[ResourceInstance.Msg],
-    instId: Int
+    currentInstId: Int
   ): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
       resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
       Behaviors.same
-    // resource should not receive finished status during "running" state, so we will keep the
-    // resource manager up.
-    case ResourceInstanceFinished(Status.Finished) =>
-      ps.ctx.log.info(
-        s"${ps.ctx.self} (running) received ResourceInstanceFinished(Status.Finished)"
+    // resource should not receive finished status during "running" state.
+    case ResourceInstanceFinished(status) =>
+      ps.ctx.log.error(
+        s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished($status, None)"
       )
-      ps.database.sync(ps.resourceQuery.setTerminated(Status.Finished))
-      finished(ps, Status.Finished)
-    case ResourceInstanceFinished(failureStatus) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished($failureStatus)")
-      if (instId >= ps.maxAttempt) {
+      Behaviors.unhandled
+    case InactiveResourceInstance(instId, status, replyTo) =>
+      ps.ctx.log.info(
+        s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
+      )
+      // in case resource is terminated (normally) by external entities
+      val failureStatus = if (status == Status.Finished) Status.Failed else status
+
+      // maybe the current instance is already a new one
+      if (instId < currentInstId) {
+        ps.ctx.self ! GetResourceInstSpec(replyTo)
+        Behaviors.same
+      } else if (currentInstId >= ps.maxAttempt) {
         ps.database.sync(ps.resourceQuery.setTerminated(failureStatus))
+        replyTo ! ResourceInstSpecRsp(Left(failureStatus))
         finished(ps, failureStatus)
       } else {
-        val newInstId = instId + 1
+        val newInstId = currentInstId + 1
+        // create a new instance upon failure and deligate the response to the new instance
         spawnResourceInstance(ps.ctx, ps.database, ps, newInstId) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
+            replyTo ! ResourceInstSpecRsp(Left(failureStatus))
             finished(ps, sts)
           case Right(rscInst) =>
+            ps.ctx.self ! GetResourceInstSpec(replyTo)
             running(ps, rscInst, newInstId)
         }
       }
@@ -171,6 +191,8 @@ object ResourceMgr {
       terminating(ps.ctx, ps, status)
   }
 
+  // finished status is when resource instance creation failed, we set resource manager in a state
+  // that it can still handle incoming calls, but won't create new instance anymore
   def finished(
     ps: Params,
     status: Status.Value
@@ -181,8 +203,14 @@ object ResourceMgr {
       Behaviors.same
     case ResourceInstanceFinished(sts) =>
       ps.ctx.log.error(
-        s"${ps.ctx.self} (finished) received unexpected ResourceInstanceFinished($sts)"
+        s"${ps.ctx.self} (finished) received UNEXPECTED ResourceInstanceFinished($sts)"
       )
+      Behaviors.same
+    case InactiveResourceInstance(instanceId, sts, replyTo) =>
+      ps.ctx.log.info(
+        s"${ps.ctx.self} (finished) received InactiveResourceInstance($instanceId, $sts, $replyTo)"
+      )
+      ps.ctx.self ! GetResourceInstSpec(replyTo)
       Behaviors.same
     case Shutdown(_) =>
       ps.ctx.log.info(s"${ps.ctx.self} (finished) received Shutdown(_)")
@@ -198,10 +226,16 @@ object ResourceMgr {
       ps.ctx.log.info(s"${ps.ctx.self} (terminating) received GetResourceInstSpec(${replyTo})")
       replyTo ! ResourceInstSpecRsp(Left(status))
       Behaviors.same
-    case ResourceInstanceFinished(_) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished(_)")
+    case ResourceInstanceFinished(sts) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
       ps.database.sync(ps.resourceQuery.setTerminated(status))
       terminate(ps, status)
+    case InactiveResourceInstance(instId, sts, replyTo) =>
+      ps.ctx.log.info(
+        s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
+      )
+      ctx.self ! GetResourceInstSpec(replyTo)
+      Behaviors.same
     case Shutdown(_) =>
       Behaviors.same
   }
