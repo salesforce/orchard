@@ -23,7 +23,7 @@ object ResourceMgr {
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
   case class ResourceInstSpecRsp(spec: Either[Status.Value, JsValue])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
-  case class FailToHandleReply(
+  case class InactiveResourceInstance(
     instanceId: Int,
     status: Status.Value,
     replyTo: ActorRef[ResourceInstSpecRsp]
@@ -131,7 +131,7 @@ object ResourceMgr {
       Behaviors.unhandled
 
     // no resource instance should exist yet, this is unexpected
-    case msg: FailToHandleReply =>
+    case msg: InactiveResourceInstance =>
       ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
       Behaviors.unhandled
 
@@ -157,9 +157,9 @@ object ResourceMgr {
         s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished($status, None)"
       )
       Behaviors.unhandled
-    case FailToHandleReply(instId, status, replyTo) =>
+    case InactiveResourceInstance(instId, status, replyTo) =>
       ps.ctx.log.info(
-        s"${ps.ctx.self} (running) received FailToHandleReply($instId, $status, $replyTo)"
+        s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
       )
       // in case resource is terminated (normally) by external entities
       val failureStatus = if (status == Status.Finished) Status.Failed else status
@@ -206,9 +206,9 @@ object ResourceMgr {
         s"${ps.ctx.self} (finished) received UNEXPECTED ResourceInstanceFinished($sts)"
       )
       Behaviors.same
-    case FailToHandleReply(instanceId, sts, replyTo) =>
+    case InactiveResourceInstance(instanceId, sts, replyTo) =>
       ps.ctx.log.info(
-        s"${ps.ctx.self} (finished) received FailToHandleReply($instanceId, $sts, $replyTo)"
+        s"${ps.ctx.self} (finished) received InactiveResourceInstance($instanceId, $sts, $replyTo)"
       )
       ps.ctx.self ! GetResourceInstSpec(replyTo)
       Behaviors.same
@@ -230,9 +230,9 @@ object ResourceMgr {
       ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
       ps.database.sync(ps.resourceQuery.setTerminated(status))
       terminate(ps, status)
-    case FailToHandleReply(instId, sts, replyTo) =>
+    case InactiveResourceInstance(instId, sts, replyTo) =>
       ps.ctx.log.info(
-        s"${ps.ctx.self} (terminating) received FailToHandleReply($instId, $sts, $replyTo)"
+        s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
       )
       ctx.self ! GetResourceInstSpec(replyTo)
       Behaviors.same

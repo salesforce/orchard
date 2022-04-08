@@ -164,7 +164,7 @@ object ResourceInstance {
   private def inactive(ps: Params, status: Status.Value): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
-      ps.resourceMgr ! ResourceMgr.FailToHandleReply(ps.instanceId, status, replyTo)
+      ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, replyTo)
       Behaviors.same
     case Shutdown(sts) =>
       ps.ctx.log.info(s"${ps.ctx.self} (inactive) received Shutdown($sts)")
@@ -178,7 +178,7 @@ object ResourceInstance {
   ): Behavior[Msg] = {
     replyTo match {
       case Some(r) =>
-        ps.resourceMgr ! ResourceMgr.FailToHandleReply(ps.instanceId, status, r)
+        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, r)
       case None =>
         ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(status)
     }
