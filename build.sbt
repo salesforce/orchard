@@ -7,14 +7,15 @@ val awsVersion = "2.17.+"
 val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
 val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
 val awsSsm            = "software.amazon.awssdk"     % "ssm"                      % awsVersion
-val slick             =  "com.typesafe.slick"       %% "slick"                    % slickVersion
-val slickHikaricp     =  "com.typesafe.slick"       %% "slick-hikaricp"           % slickVersion
-val postgresql        =  "org.postgresql"            % "postgresql"               % "42.3.3"
-val playJson          =  "com.typesafe.play"        %% "play-json"                % playJsonVersion
-val akkaActor         =  "com.typesafe.akka"        %% "akka-actor-typed"         % akkaVersion
-val akkaTestkit       =  "com.typesafe.akka"        %% "akka-actor-testkit-typed" % akkaVersion % Test
+val slick             = "com.typesafe.slick"        %% "slick"                    % slickVersion
+val slickHikaricp     = "com.typesafe.slick"        %% "slick-hikaricp"           % slickVersion
+val postgresql        = "org.postgresql"             % "postgresql"               % "42.3.3"
+val playJson          = "com.typesafe.play"         %% "play-json"                % playJsonVersion
+val akkaActor         = "com.typesafe.akka"         %% "akka-actor-typed"         % akkaVersion
+val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.11" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.2.11" % Test
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
@@ -50,7 +51,8 @@ lazy val orchardCore = (project in file("orchard-core")).
       postgresql,
       playJson,
       akkaActor,
-      akkaTestkit
+      akkaTestkit,
+      logback
     )
   )
 

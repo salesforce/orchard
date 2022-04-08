@@ -31,6 +31,7 @@ object ResourceInstance {
     database: OrchardDatabase,
     query: ResourceInstanceQuery,
     resourceIO: ResourceIO,
+    instanceId: Int,
     timers: TimerScheduler[ResourceInstance.Msg]
   )
 
@@ -56,6 +57,7 @@ object ResourceInstance {
         database,
         query,
         resourceIO,
+        instanceId,
         timers
       )
 
@@ -73,6 +75,7 @@ object ResourceInstance {
     }
   }
 
+  // pending is the initial state after RI is created
   private def pending(ps: Params): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (pending) received GetResourceInstSpec($replyTo)")
@@ -85,13 +88,12 @@ object ResourceInstance {
         case Left(exp) =>
           ps.ctx.log.error(s"${ps.ctx.self} (pending) Exception when creating resource", exp)
           ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Left(Status.Pending))
-          terminate(ps.resourceMgr, Status.Failed)
+          terminate(ps, Status.Failed, Option(replyTo))
       }
     case Shutdown(status) =>
       ps.ctx.log.info(s"${ps.ctx.self} (pending) received Shutdown($status)")
       ps.database.sync(ps.query.setTerminated(status, ""))
-      terminate(ps.resourceMgr, status)
+      terminate(ps, status, None)
   }
 
   private def activating(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {
@@ -111,16 +113,14 @@ object ResourceInstance {
           ps.ctx.log.info(
             s"${ps.ctx.self} (activating) received resource status $sts, shutting down"
           )
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Left(sts))
-          shuttindDown(ps, instSpec, sts)
+          shuttingDown(ps, instSpec, sts, Option(replyTo))
         case Left(exp) =>
           ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource exception, shutting down")
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Left(Status.Failed))
-          shuttindDown(ps, instSpec, Status.Failed)
+          shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
       }
     case Shutdown(status) =>
       ps.ctx.log.info(s"${ps.ctx.self} (activating) received Shutdown($status)")
-      shuttindDown(ps, instSpec, Status.Failed)
+      shuttingDown(ps, instSpec, Status.Failed, None)
   }
 
   private def running(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {
@@ -131,17 +131,21 @@ object ResourceInstance {
           replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(instSpec))
           Behaviors.same
         case sts =>
-          ps.ctx.log.error(s"${ps.ctx.self} (running) Unexpected resource status $sts")
+          ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")
           ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Left(Status.Failed))
-          terminate(ps.resourceMgr, Status.Failed)
+          terminate(ps, Status.Failed, Option(replyTo))
       }
     case Shutdown(status) =>
       ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
-      shuttindDown(ps, instSpec, status)
+      shuttingDown(ps, instSpec, status, None)
   }
 
-  private def shuttindDown(ps: Params, instSpec: JsValue, status: Status.Value): Behavior[Msg] = {
+  private def shuttingDown(
+    ps: Params,
+    instSpec: JsValue,
+    status: Status.Value,
+    replyTo: Option[ActorRef[ResourceMgr.ResourceInstSpecRsp]]
+  ): Behavior[Msg] = {
     val errorMsg = ps.resourceIO.terminate(instSpec) match {
       case Right(sts) =>
         ""
@@ -152,15 +156,31 @@ object ResourceInstance {
         exp.getMessage()
     }
     ps.database.sync(ps.query.setTerminated(status, errorMsg))
-    terminate(ps.resourceMgr, status)
+    terminate(ps, status, replyTo)
+  }
+
+  private def inactive(ps: Params, status: Status.Value): Behavior[Msg] = Behaviors.receiveMessage {
+    case GetResourceInstSpec(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
+      ps.resourceMgr ! ResourceMgr.FailToHandleReply(ps.instanceId, status, replyTo)
+      Behaviors.same
+    case Shutdown(sts) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (inactive) received Shutdown($sts)")
+      Behaviors.same
   }
 
   private def terminate(
-    resourceMgr: ActorRef[ResourceMgr.Msg],
-    status: Status.Value
+    ps: Params,
+    status: Status.Value,
+    replyTo: Option[ActorRef[ResourceMgr.ResourceInstSpecRsp]]
   ): Behavior[Msg] = {
-    resourceMgr ! ResourceMgr.ResourceInstanceFinished(status)
-    Behaviors.stopped
+    replyTo match {
+      case Some(r) =>
+        ps.resourceMgr ! ResourceMgr.FailToHandleReply(ps.instanceId, status, r)
+      case None =>
+        ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(status)
+    }
+    inactive(ps, status)
   }
 
 }
