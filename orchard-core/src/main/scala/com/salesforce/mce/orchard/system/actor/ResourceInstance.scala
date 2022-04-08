@@ -159,6 +159,8 @@ object ResourceInstance {
     terminate(ps, status, replyTo)
   }
 
+  // We should not terminate resource instance actor as it may need to respond to pending queries
+  // from activity attempts in the mailbox
   private def inactive(ps: Params, status: Status.Value): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
