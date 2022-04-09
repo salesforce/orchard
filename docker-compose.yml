@@ -23,6 +23,18 @@ services:
       - orchard-postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: "${ORCHARD_PG_SECRET}"
+  flyway:
+    image: flyway/flyway:latest-alpine
+    volumes:
+      - ./flyway/sql:/flyway/sql
+    environment:
+      FLYWAY_URL: "jdbc:postgresql://db:5432/postgres"
+      FLYWAY_USER: "postgres"
+      FLYWAY_PASSWORD: "${ORCHARD_PG_SECRET}"
+    depends_on:
+      - db
+    command:
+      migrate
 
 volumes:
   orchard-postgres-data:
