@@ -15,7 +15,6 @@ import slick.jdbc.PostgresProfile.api._
 
 import com.salesforce.mce.orchard.db._
 
-
 object ProvisionDatabase extends App {
 
   val schema = WorkflowTable().schema ++
