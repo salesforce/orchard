@@ -62,6 +62,7 @@ docker-compose -f stack.yml up
 After the stack starts, verify the Postgres database is running by navigating in a browser to `http://localhost:8087`.
 
 **Provision database tables**
+
 Assuming that both SBT and a compatible version of Scala are installed (2.13.8 recommended), the next step is to provision the database tables Orchard will use. From the Orchard root directory:
 ```sh
 sbt "; project orchardCore ; runMain com.salesforce.mce.orchard.tool.ProvisionDatabase"
@@ -75,8 +76,9 @@ sbt orchardWS/run
 ```
 
 **Authentication**
+
 Orchard is by default running a development configuration where authentication is disabled. To enable API authentication, set `orchard.auth.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). Orchard will then pull the keys specified in 
-```json
+```
 hashed-keys = {
         user = [ ${?MCE_ENV_X_API_USER}, ${?MCE_ENV_X_API_ADMIN_USER} ]
         admin = [ ${?MCE_ENV_X_API_ADMIN}, ${?MCE_ENV_X_API_ADMIN_USER} ]
@@ -203,6 +205,7 @@ PUT http://localhost:9000/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
 ```
 
 **Resource and Activity Types**
+
 In the above example workflow, the activities and resources used are **stubs**. In an actual deployment, Orchard will be using resources and activities specific to the chosen cloud provider's environment. 
 
 Currently, Orchard supports:
