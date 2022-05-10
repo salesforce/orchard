@@ -8,7 +8,7 @@ Orchard is an orchestration service that manages data pipelines, compute workflo
 Inspired by AWS' [Data Pipeline](https://aws.amazon.com/datapipeline/) service, Orchard is designed for enterprise use-cases that demand security, extreme concurrency, granular control over the resource lifecycle, and flexible integration with a cloud-based microservice architecture.
 
 ## Design
-Like Apache Spark, Orchard is written in functional Scala. This gives orchard the power of Scala's well-developed concurrency features, and in particular, the Actor pattern as enabled by Scala's [Akka](https://github.com/akka/akka) library.
+Like Apache Spark, Orchard is written in functional Scala. This gives Orchard the power of Scala's well-developed concurrency features, and in particular, the Actor pattern as enabled by Scala's [Akka](https://github.com/akka/akka) library.
 
 ## Setup
 Orchard is designed to be deployed into a cloud environment as a service, but can alternatively be set up locally for exploration and development. To do so, follow these steps. 
@@ -88,13 +88,13 @@ hashed-keys = {
 which must match the key provided in the header of any inbound API requests. 
 
 ## Using Orchard
-Once the setup is complete, Orchard is ready to recieve a number of different instructions via API request.
+Once the setup is complete, Orchard is ready to receive a number of different instructions via API request.
 
-If deployed into a cloud environment like AWS, Orchard will need a role with an appropriate set of permissions appropriate for the activites. 
+If deployed into a cloud environment like AWS, Orchard will need a role with an appropriate set of permissions appropriate for the activities. 
 
 Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependant on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-Below is an example workflow that defines a number of activites:
+Below is an example workflow that defines a number of activities:
 
 ```json
 {
@@ -211,7 +211,7 @@ In the above example workflow, the activities and resources used are **stubs**. 
 
 Currently, Orchard supports:
 - AWS EC2 activities / resources
-- AWS EMR acvitivites / resources
+- AWS EMR activities / resources
 - AWS S3 resources
 - AWS SSM resources
 - Shell script activity
