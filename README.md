@@ -27,6 +27,7 @@ brew install -cask docker
 ```
 
 **Configure Postgres Database**
+
 Orchard uses a Postgres database in the docker-compose stack to store the state of each active task. Set the password for this database edit the stack.yml file in the Orchard root directory (shown here as `orchardsecret`):
 ```yaml
 version: '3.1'
@@ -89,7 +90,7 @@ which must match the key provided in the header of any inbound API requests.
 ## Using Orchard
 Once the setup is complete, Orchard is ready to recieve a number of different instructions via API request.
 
-If deployed into a cloud environment like AWS, Orchard will need a role with a set of permissions appropriate for the activites. 
+If deployed into a cloud environment like AWS, Orchard will need a role with an appropriate set of permissions appropriate for the activites. 
 
 Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependant on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
@@ -206,7 +207,7 @@ PUT http://localhost:9000/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
 
 **Resource and Activity Types**
 
-In the above example workflow, the activities and resources used are **stubs**. In an actual deployment, Orchard will be using resources and activities specific to the chosen cloud provider's environment. 
+In the above example workflow, the activities and resources used are **stubs**. In an actual deployment, Orchard will be using resources and activities specific to the chosen cloud provider's environment, like AWS' EC2 or EMI. Each activity has its own `activitySpec`, which contains configuration needed to carry out that activity.
 
 Currently, Orchard supports:
 - AWS EC2 activities / resources
