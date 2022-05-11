@@ -18,8 +18,9 @@ Orchard is designed to be deployed into a cloud environment as a service, but ca
 # clone orchard into a local directory
 git clone git@github.com:salesforce/orchard.git
 
-# use brew to install Scala Build Tool (SBT)
-brew install sbt
+# use sdkman to install Scala Build Tool (SBT) (if needed)
+curl -s "https://get.sdkman.io" | bash
+sdk install sbt
 
 # use brew to install postman (for API calls) and docker (if needed)
 brew install -cask postman
@@ -28,53 +29,19 @@ brew install -cask docker
 
 **Configure Postgres Database**
 
-Orchard uses a Postgres database in the docker-compose stack to store the state of each active task. Set the password for this database edit the stack.yml file in the Orchard root directory (shown here as `orchardsecret`):
-```yaml
-version: '3.1'
+Orchard uses a Postgres database in the docker-compose stack to store the state of each active task. Set the password for this database by adding a [.env file](https://docs.docker.com/compose/environment-variables/#the-env-file) to the project's root containing `ORCHARD_PG_SECRET=orchardsecret`, substituting `orchardsecret` for your own secret.
 
-services:
-
-  db:
-    image: postgres
-    restart: always
-    ports:
-      - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: orchardsecret
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8087:8080
-```
-
-Then, export the server address and chosen password with:
+or set directly in the environment with:
 ```sh
-export POSTGRES_SERVER= localhost
-export POSTGRES_PASSWORD= orchardsecret
+export ORCHARD_PG_SECRET=orchardsecret
 ```
 
 **Start the Docker Compose stack**
 ```sh
-docker-compose -f stack.yml up
+docker-compose up
 ```
 
-After the stack starts, verify the Postgres database is running by navigating in a browser to `http://localhost:8087`.
-
-**Provision database tables**
-
-Assuming that both SBT and a compatible version of Scala are installed (2.13.8 recommended), the next step is to provision the database tables Orchard will use. From the Orchard root directory:
-```sh
-sbt "; project orchardCore ; runMain com.salesforce.mce.orchard.tool.ProvisionDatabase"
-```
-
-**Start the web service**
-
-As above:
-```sh
-sbt orchardWS/run
-```
+This will start the database container, provision the required tables, and start the Orchard web-serivce. 
 
 **Authentication**
 
@@ -94,7 +61,7 @@ If deployed into a cloud environment like AWS, Orchard will need a role with an 
 
 Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependant on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-Below is an example workflow that defines a number of activities:
+Below is an example workflow that defines a number of activities to be executed in an AWS VPC environment:
 
 ```json
 {
@@ -110,11 +77,11 @@ Below is an example workflow that defines a number of activities:
                         "jar": "command-runner.jar",
                         "args": [
                             "spark-submit",
-                            "s3://realstraw-misc-private/managed/health_violations.py",
+                            "s3://s3bucket/submit/spark_submit.py",
                             "--data_source",
-                            "s3://realstraw-misc-private/data/food_establishment_data.csv",
+                            "s3://s3bucket/data/data_source.csv",
                             "--output_uri",
-                            "s3://realstraw-misc-private/data/output"
+                            "s3://s3bucket/data/output"
                         ]
                     }
                 ]
@@ -153,9 +120,9 @@ Below is an example workflow that defines a number of activities:
                     "Spark"
                 ],
                 "serviceRole": "EMR_Role",
-                "resourceRole": "mce-sto-service-55p3gg121oe2zy",
+                "resourceRole": "emr-resource-role",
                 "instancesConfig": {
-                    "subnetId": "subnet-6648de2b",
+                    "subnetId": "subnet-0000ab0a",
                     "ec2KeyName": "orchard",
                     "instanceCount": 2,
                     "masterInstanceType": "m5.xlarge",
@@ -174,9 +141,9 @@ Below is an example workflow that defines a number of activities:
                     "Spark"
                 ],
                 "serviceRole": "EMR_Role",
-                "resourceRole": "mce-sto-service-55p3gg121oe2zy",
+                "resourceRole": "emr-resource-role",
                 "instancesConfig": {
-                    "subnetId": "subnet-6648de2b",
+                    "subnetId": "subnet-0000ab0a",
                     "ec2KeyName": "orchard",
                     "instanceCount": 2,
                     "masterInstanceType": "m5.xlarge",
