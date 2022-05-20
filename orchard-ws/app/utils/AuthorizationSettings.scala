@@ -21,13 +21,12 @@ class AuthorizationSettings private (config: Config) {
     .entrySet()
     .asScala
     .filter(_.getKey.startsWith(s"hashed-keys."))
-    .map(kv => {
-      val key: String = kv.getKey.stripPrefix(s"hashed-keys.")
+    .foldLeft(Map[String, List[String]]()) { (b, kv) =>
+      val k: String = kv.getKey.stripPrefix(s"hashed-keys.")
       val configList: ConfigList = kv.getValue.asInstanceOf[ConfigList]
-      val listValue = configList.unwrapped().asScala.map(_.toString).toList
-      (key, listValue)
-    })
-    .toMap
+      val v = configList.unwrapped().asScala.map(_.toString).toList
+      (b -- v) ++ v.map(j => (j, b.getOrElse(j, List.empty) ++ List(k))).toMap
+    }
 
 }
 
