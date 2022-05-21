@@ -19,8 +19,8 @@ class AuthorizationSettings private (config: Config) {
 
   def keyRoles: Map[String, List[String]] = {
     val userRoles = for {
-      (r, _) <- config.getConfig("hashed-keys").root().asScala.toList
-      u <- asInstanceOf[ConfigList].unwrapped().asScala
+      (r, us) <- config.getConfig("hashed-keys").root().asScala.toList
+      u <- us.asInstanceOf[ConfigList].unwrapped().asScala
     } yield u.toString() -> r
 
     userRoles.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
