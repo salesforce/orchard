@@ -7,7 +7,7 @@
 
 package utils
 
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigList}
 
@@ -17,17 +17,14 @@ class AuthorizationSettings private (config: Config) {
 
   def authEnabled: Boolean = config.getBoolean(s"enabled")
 
-  def keyRoles: Map[String, List[String]] = config
-    .entrySet()
-    .asScala
-    .filter(_.getKey.startsWith(s"hashed-keys."))
-    .map(kv => {
-      val key: String = kv.getKey.stripPrefix(s"hashed-keys.")
-      val configList: ConfigList = kv.getValue.asInstanceOf[ConfigList]
-      val listValue = configList.unwrapped().asScala.map(_.toString).toList
-      (key, listValue)
-    })
-    .toMap
+  def keyRoles: Map[String, List[String]] = {
+    val userRoles = for {
+      (r, _) <- config.getConfig("hashed-keys").root().asScala.toList
+      u <- asInstanceOf[ConfigList].unwrapped().asScala
+    } yield u.toString() -> r
+
+    userRoles.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
+  }
 
 }
 
