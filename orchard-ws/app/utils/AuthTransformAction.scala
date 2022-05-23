@@ -14,13 +14,14 @@ import scala.concurrent.{ExecutionContext, Future}
 import play.api.Logging
 import play.api.mvc.{ActionBuilder, ActionTransformer, AnyContent, BodyParsers, Request}
 
-class AuthTransformAction @Inject() (val parser: BodyParsers.Default)(implicit
+class AuthTransformAction @Inject() (val parser: BodyParsers.Default, auth: Authorization)(implicit
   val executionContext: ExecutionContext
 ) extends ActionBuilder[ApiRequest, AnyContent] with ActionTransformer[Request, ApiRequest]
-    with Logging {
-  def transform[A](request: Request[A]) =
+  with Logging {
+
+  override def transform[A](request: Request[A]) =
     Future.successful {
-      Authorization.getRoles(request) match {
+      auth.getRoles(request) match {
         case Nil =>
           logger.debug(s"transform not found x-api-key")
           InvalidApiRequest(request)

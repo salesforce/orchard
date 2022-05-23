@@ -13,6 +13,8 @@ import play.api.libs.concurrent.AkkaGuiceSupport
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 import services.{ApplicationTimer, AtomicCounter, Counter}
+import tasks.AuthSettingReloadTask
+import utils.{Authorization, AuthorizationSettings}
 
 /**
  * This class is a Guice module that tells Guice how to bind several
@@ -33,6 +35,10 @@ class Module extends AbstractModule with AkkaGuiceSupport {
     bind(classOf[ApplicationTimer]).asEagerSingleton()
     // Set AtomicCounter as the implementation for Counter.
     bind(classOf[Counter]).to(classOf[AtomicCounter])
+    // Pass in custom implementation with configs for Authorization
+    bind(classOf[Authorization]).toInstance(new Authorization(AuthorizationSettings()))
+    // Activate authorization setting reload task
+    bind(classOf[AuthSettingReloadTask]).asEagerSingleton()
 
     bindTypedActor(OrchardSystem.apply(), "orchard-system")
   }
