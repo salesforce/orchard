@@ -11,14 +11,14 @@ import java.math.BigInteger
 import java.security.MessageDigest
 
 import scala.util.Try
+import scala.concurrent.duration._
 
 import play.api.mvc.Request
+import com.typesafe.config.ConfigFactory
 
-object Authorization {
-  final val Admin = "admin"
-  final val User = "user"
+class Authorization(private var authorizationSettings: AuthorizationSettings) {
 
-  lazy val authorizationSettings: AuthorizationSettings = AuthorizationSettings()
+  import Authorization._
 
   def getRoles(request: Request[_]): List[String] = {
     authorizationSettings.authEnabled match {
@@ -40,10 +40,25 @@ object Authorization {
       .map(validateKey)
       .getOrElse(!authorizationSettings.authEnabled)
 
+  def refreshDelay: Option[FiniteDuration] = authorizationSettings.ttl.map(_.second)
+
   private def validateKey(key: String): Boolean =
     authorizationSettings.keyRoles.contains(convertToSha256(key))
 
-  private def convertToSha256(key: String): String =
+  def reloadSettings(): this.type = {
+    ConfigFactory.invalidateCaches()
+    authorizationSettings = AuthorizationSettings()
+    this
+  }
+
+}
+
+object Authorization {
+
+  final val Admin = "admin"
+  final val User = "user"
+
+  def convertToSha256(key: String): String =
     Try(
       String.format(
         "%032x",
@@ -55,4 +70,5 @@ object Authorization {
         )
       )
     ).getOrElse(key)
+
 }

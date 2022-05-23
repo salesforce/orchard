@@ -7,8 +7,12 @@
 
 package utils
 
-import scala.jdk.CollectionConverters._
+import java.net.URL
 
+import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
+
+import com.typesafe.config.ConfigException
 import com.typesafe.config.{Config, ConfigFactory, ConfigList}
 
 class AuthorizationSettings private (config: Config) {
@@ -26,6 +30,13 @@ class AuthorizationSettings private (config: Config) {
     userRoles.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
   }
 
+
+  def ttl: Option[Long] = Try(config.getInt(s"ttl")) match {
+    case Success(d) => Some(d)
+    case Failure(e: ConfigException.Missing) => None
+    case Failure(e) => throw e
+  }
+
 }
 
 object AuthorizationSettings {
@@ -36,6 +47,11 @@ object AuthorizationSettings {
     rootConfig.getConfig(configPath)
   )
 
-  def apply(): AuthorizationSettings = withRootConfig(ConfigFactory.load())
+  private def loadConfig(): Config = Option(System.getProperty("orchard.auth.config"))
+    .orElse(Option(System.getenv("ORCHARD_AUTH_CONFIG_URL")))
+    .map(url => ConfigFactory.load(ConfigFactory.parseURL(new URL(url))))
+    .getOrElse(ConfigFactory.load())
+
+  def apply(): AuthorizationSettings = withRootConfig(loadConfig())
 
 }
