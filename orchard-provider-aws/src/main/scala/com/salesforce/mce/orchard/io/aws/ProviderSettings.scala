@@ -16,16 +16,16 @@ case class ProviderSettings(config: Config) {
     Try(config.getValue(path).unwrapped().asInstanceOf[T]).toOption
   } else None
 
-  lazy val loggingUri = getConfig[String]("io.aws.logging.uri")
-  lazy val staticCredentials = getConfig[Boolean]("aws.static.credentials")
-  lazy val awsAccessKeyId = getConfig[String]("aws.accessKeyId")
-  lazy val awsSecretKey = getConfig[String]("aws.secretKey")
-  lazy val awsRegion = getConfig[String]("aws.region")
+  lazy val loggingUri = getConfig[String]("aws.logging.uri")
+  lazy val staticCredEnabled = getConfig[Boolean]("aws.static.credentials.enabled")
+  lazy val awsAccessKeyId = getConfig[String]("aws.static.credentials.accessKeyId")
+  lazy val awsSecretKey = getConfig[String]("aws.static.credentials.secretKey")
+  lazy val awsRegion = getConfig[String]("aws.static.credentials.region")
 }
 
 object ProviderSettings {
 
   def apply(): ProviderSettings =
-    ProviderSettings(ConfigFactory.load().getConfig("com.salesforce.mce.orchard"))
+    ProviderSettings(ConfigFactory.load().getConfig("com.salesforce.mce.orchard.io"))
 
 }
