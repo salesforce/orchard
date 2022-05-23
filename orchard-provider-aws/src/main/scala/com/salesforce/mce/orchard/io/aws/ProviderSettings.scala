@@ -7,22 +7,25 @@
 
 package com.salesforce.mce.orchard.io.aws
 
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import scala.util.Try
+import com.typesafe.config.{Config, ConfigFactory}
 
 case class ProviderSettings(config: Config) {
 
-  def loggingUri: Option[String] = {
-    val path = "logging.uri"
-    if (config.hasPath(path)) Option(config.getString(path))
-    else None
-  }
+  def getConfig[T](path: String): Option[T] = if (config.hasPath(path)) {
+    Try(config.getValue(path).unwrapped().asInstanceOf[T]).toOption
+  } else None
 
+  lazy val loggingUri = getConfig[String]("io.aws.logging.uri")
+  lazy val staticCredentials = getConfig[Boolean]("aws.static.credentials")
+  lazy val awsAccessKeyId = getConfig[String]("aws.accessKeyId")
+  lazy val awsSecretKey = getConfig[String]("aws.secretKey")
+  lazy val awsRegion = getConfig[String]("aws.region")
 }
 
 object ProviderSettings {
 
   def apply(): ProviderSettings =
-    ProviderSettings(ConfigFactory.load().getConfig("com.salesforce.mce.orchard.io.aws"))
+    ProviderSettings(ConfigFactory.load().getConfig("com.salesforce.mce.orchard"))
 
 }
