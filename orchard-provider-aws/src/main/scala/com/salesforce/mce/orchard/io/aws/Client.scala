@@ -44,7 +44,7 @@ object Client {
 
   def ssm(): SsmClient = staticCredentialsOpt match {
     case Some((staticCred, awsRegion)) =>
-    SsmClient.builder().region(Region.of(awsRegion)).credentialsProvider(staticCred).build()
+      SsmClient.builder().region(Region.of(awsRegion)).credentialsProvider(staticCred).build()
     case None => SsmClient.create()
   }
 }
