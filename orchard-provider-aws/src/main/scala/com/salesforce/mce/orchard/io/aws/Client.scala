@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.ssm.SsmClient
 
 object Client {
 
-  def staticCredentialsOpt: Option[(StaticCredentialsProvider, String)] = {
+  def staticCredentialsOpt: Option[(StaticCredentialsProvider, Region)] = {
     if (ProviderSettings().staticCredEnabled.contains(true)) {
       for {
         awsAccessKeyId <- ProviderSettings().awsAccessKeyId
@@ -25,26 +25,23 @@ object Client {
         val staticCred = StaticCredentialsProvider.create(
           AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
         )
-        (staticCred, awsRegion)
+        (staticCred, Region.of(awsRegion))
       }
     } else None
   }
 
   def ec2(): Ec2Client = staticCredentialsOpt match {
-    case Some((staticCred, awsRegion)) =>
-      Ec2Client.builder().region(Region.of(awsRegion)).credentialsProvider(staticCred).build()
+    case Some((staticCred, region)) => Ec2Client.builder().region(region).credentialsProvider(staticCred).build()
     case None => Ec2Client.create()
   }
 
   def emr(): EmrClient = staticCredentialsOpt match {
-    case Some((staticCred, awsRegion)) =>
-      EmrClient.builder().region(Region.of(awsRegion)).credentialsProvider(staticCred).build()
+    case Some((staticCred, region)) => EmrClient.builder().region(region).credentialsProvider(staticCred).build()
     case None => EmrClient.create()
   }
 
   def ssm(): SsmClient = staticCredentialsOpt match {
-    case Some((staticCred, awsRegion)) =>
-      SsmClient.builder().region(Region.of(awsRegion)).credentialsProvider(staticCred).build()
+    case Some((staticCred, region)) => SsmClient.builder().region(region).credentialsProvider(staticCred).build()
     case None => SsmClient.create()
   }
 }
