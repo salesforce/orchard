@@ -14,7 +14,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 case class ProviderSettings(config: Config) {
 
   private def getConfigString(path: String): Option[String] = {
-    if (config.hasPath(path)) Try(config.getString(path)).toOption else None
+    if (config.hasPath(path)) Option(config.getString(path)) else None
   }
 
   lazy val loggingUri = getConfigString("aws.logging.uri")
