@@ -16,18 +16,16 @@ import software.amazon.awssdk.services.ssm.SsmClient
 object Client {
 
   def staticCredentialsOpt: Option[(StaticCredentialsProvider, Region)] = {
-    if (ProviderSettings().staticCredEnabled.contains(true)) {
-      for {
-        awsAccessKeyId <- ProviderSettings().awsAccessKeyId
-        awsSecretKey <- ProviderSettings().awsSecretKey
-        awsRegion <- ProviderSettings().awsRegion
-      } yield {
-        val staticCred = StaticCredentialsProvider.create(
-          AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
-        )
-        (staticCred, Region.of(awsRegion))
-      }
-    } else None
+    for {
+      awsAccessKeyId <- ProviderSettings().awsAccessKeyId
+      awsSecretKey <- ProviderSettings().awsSecretKey
+      awsRegion <- ProviderSettings().awsRegion
+    } yield {
+      val staticCred = StaticCredentialsProvider.create(
+        AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
+      )
+      (staticCred, Region.of(awsRegion))
+    }
   }
 
   def ec2(): Ec2Client = staticCredentialsOpt match {

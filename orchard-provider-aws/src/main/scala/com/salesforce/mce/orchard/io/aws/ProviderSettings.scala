@@ -17,7 +17,6 @@ case class ProviderSettings(config: Config) {
   } else None
 
   lazy val loggingUri = getConfig[String]("aws.logging.uri")
-  lazy val staticCredEnabled = getConfig[Boolean]("aws.static.credentials.enabled")
   lazy val awsAccessKeyId = getConfig[String]("aws.static.credentials.accessKeyId")
   lazy val awsSecretKey = getConfig[String]("aws.static.credentials.secretKey")
   lazy val awsRegion = getConfig[String]("aws.static.credentials.region")
