@@ -7,8 +7,6 @@
 
 package com.salesforce.mce.orchard.io.aws
 
-import scala.util.Try
-
 import com.typesafe.config.{Config, ConfigFactory}
 
 case class ProviderSettings(config: Config) {
