@@ -25,16 +25,14 @@ object Client {
     AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
   )
 
-  def assumeRoleArnOpt: Option[String] = for {
-    awsRoleToAssume <- ProviderSettings().awsRoleToAssume
-  } yield awsRoleToAssume
-
   def clientRegionOpt: Option[Region] = for {
     clientRegion <- ProviderSettings().awsClientRegion
   } yield Region.of(clientRegion)
 
   def assumeRoleCredentialsOpt(clientType: String): Option[StsAssumeRoleCredentialsProvider] = {
-    assumeRoleArnOpt.map { assumeRoleArn =>
+    for {
+      awsRoleToAssume <- ProviderSettings().awsRoleToAssume
+    } yield {
 
       val stsClient = staticCredentialsOpt.map { staticCredentials =>
         StsClient.builder().credentialsProvider(staticCredentials).build()
@@ -42,7 +40,7 @@ object Client {
 
       val assumeRoleRequest = AssumeRoleRequest
         .builder()
-        .roleArn(assumeRoleArn)
+        .roleArn(awsRoleToAssume)
         .roleSessionName(s"${clientType}Session")
         .build()
 
