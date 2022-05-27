@@ -31,7 +31,7 @@ object Client {
 
   def assumeRoleCredentialsOpt(clientType: String): Option[StsAssumeRoleCredentialsProvider] = {
     for {
-      awsRoleToAssume <- ProviderSettings().awsRoleToAssume
+      awsRoleArnToAssume <- ProviderSettings().awsRoleArnToAssume
     } yield {
 
       val stsClient = staticCredentialsOpt.map { staticCredentials =>
@@ -40,7 +40,7 @@ object Client {
 
       val assumeRoleRequest = AssumeRoleRequest
         .builder()
-        .roleArn(awsRoleToAssume)
+        .roleArn(awsRoleArnToAssume)
         .roleSessionName(s"${clientType}Session")
         .build()
 
