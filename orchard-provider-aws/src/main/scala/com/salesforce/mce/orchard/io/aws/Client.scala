@@ -12,6 +12,9 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.ec2.Ec2Client
 import software.amazon.awssdk.services.emr.EmrClient
 import software.amazon.awssdk.services.ssm.SsmClient
+import software.amazon.awssdk.services.sts.StsClient
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider
 
 object Client {
 
@@ -22,9 +25,33 @@ object Client {
     AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
   )
 
+  def assumeRoleArnOpt: Option[String] = for {
+    awsRoleToAssume <- ProviderSettings().awsRoleToAssume
+  } yield awsRoleToAssume
+
   def clientRegionOpt: Option[Region] = for {
     clientRegion <- ProviderSettings().awsClientRegion
   } yield Region.of(clientRegion)
+
+  def assumeRoleCredentialsOpt(clientType: String): Option[StsAssumeRoleCredentialsProvider] = {
+    assumeRoleArnOpt.map { assumeRoleArn =>
+
+      val stsClient = staticCredentialsOpt.map { staticCredentials =>
+        StsClient.builder().credentialsProvider(staticCredentials).build()
+      }.getOrElse(StsClient.builder().build())
+
+      val assumeRoleRequest = AssumeRoleRequest
+        .builder()
+        .roleArn(assumeRoleArn)
+        .roleSessionName(s"${clientType}Session")
+        .build()
+
+      StsAssumeRoleCredentialsProvider.builder()
+        .refreshRequest(assumeRoleRequest)
+        .stsClient(stsClient)
+        .build()
+    }
+  }
 
   def ec2(): Ec2Client = {
 
@@ -32,9 +59,14 @@ object Client {
       .map(Ec2Client.builder().region)
       .getOrElse(Ec2Client.builder())
 
-    staticCredentialsOpt
-      .map(clientBuilder.credentialsProvider(_).build())
-      .getOrElse(clientBuilder.build())
+    assumeRoleCredentialsOpt(Ec2Client.SERVICE_NAME) match {
+      case Some(stsAssumeRoleCredentials) =>
+        clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
+      case None =>
+        staticCredentialsOpt
+          .map(clientBuilder.credentialsProvider(_).build())
+          .getOrElse(clientBuilder.build())
+    }
   }
 
   def emr(): EmrClient = {
@@ -43,9 +75,14 @@ object Client {
       .map(EmrClient.builder().region)
       .getOrElse(EmrClient.builder())
 
-    staticCredentialsOpt
-      .map(clientBuilder.credentialsProvider(_).build())
-      .getOrElse(clientBuilder.build())
+    assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
+      case Some(stsAssumeRoleCredentials) =>
+        clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
+      case None =>
+        staticCredentialsOpt
+          .map(clientBuilder.credentialsProvider(_).build())
+          .getOrElse(clientBuilder.build())
+    }
   }
 
   def ssm(): SsmClient = {
@@ -54,8 +91,13 @@ object Client {
       .map(SsmClient.builder().region)
       .getOrElse(SsmClient.builder())
 
-    staticCredentialsOpt
-      .map(clientBuilder.credentialsProvider(_).build())
-      .getOrElse(clientBuilder.build())
+    assumeRoleCredentialsOpt(SsmClient.SERVICE_NAME) match {
+      case Some(stsAssumeRoleCredentials) =>
+        clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
+      case None =>
+        staticCredentialsOpt
+          .map(clientBuilder.credentialsProvider(_).build())
+          .getOrElse(clientBuilder.build())
+    }
   }
 }
