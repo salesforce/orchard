@@ -56,39 +56,64 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     Json.toJson(Ec2Resource.InstSpec(resp.instances().asScala.head.instanceId()))
   }.toEither
 
+  /**
+   * @param instSpec
+   * @return Boolean SSM has visibility to the EC2 instance
+   */
+  private def isSsmVisible(instSpec: JsValue): Boolean = {
+    val ssmClient = Client.ssm()
+    val isVisible = ssmClient
+      .describeInstanceInformation()
+      .instanceInformationList()
+      .asScala
+      .map(_.instanceId())
+      .toSet
+      .contains((instSpec \ "ec2InstanceId").as[String])
+    ssmClient.close()
+    isVisible
+  }
+
   override def getStatus(instSpec: JsValue): Either[Throwable, Status.Value] = {
     logger.debug(s"getStatus: instSpec=${instSpec.toString()}")
     val client = Client.ec2()
     val ec2InstanceId = (instSpec \ "ec2InstanceId").as[String]
-    val response: DescribeInstancesResponse = client.describeInstances(
-      DescribeInstancesRequest
-        .builder()
-        .instanceIds(ec2InstanceId)
-        .build()
-    )
-    val state = response
-      .reservations()
-      .asScala
-      .flatMap { r => r.instances().asScala.map { i => i.state().name() } }
-      .toList
-    client.close()
-    val res = state.nonEmpty match {
-      case true =>
-        state.head match {
-          case InstanceStateName.PENDING => Right(Status.Activating)
-          case InstanceStateName.RUNNING => Right(Status.Running)
-          case InstanceStateName.TERMINATED => Right(Status.Finished)
-          case InstanceStateName.STOPPING => Right(Status.Finished)
-          case InstanceStateName.STOPPED => Right(Status.Finished)
-          case InstanceStateName.SHUTTING_DOWN => Right(Status.Finished)
-          case InstanceStateName.UNKNOWN_TO_SDK_VERSION =>
-            Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
-          case _ => Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
-        }
-      case _ => Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
+    try {
+      val response: DescribeInstancesResponse = client.describeInstances(
+        DescribeInstancesRequest
+          .builder()
+          .instanceIds(ec2InstanceId)
+          .build()
+      )
+      val state = response
+        .reservations()
+        .asScala
+        .flatMap { r => r.instances().asScala.map { i => i.state().name() } }
+        .toList
+      client.close()
+      val res = state.nonEmpty match {
+        case true =>
+          state.head match {
+            case InstanceStateName.PENDING => Right(Status.Activating)
+            case InstanceStateName.RUNNING =>
+              isSsmVisible(Json.toJson(Ec2Resource.InstSpec(ec2InstanceId))) match {
+                case true => Right(Status.Running)
+                case _ => Right(Status.Activating)
+              }
+            case InstanceStateName.TERMINATED => Right(Status.Finished)
+            case InstanceStateName.STOPPING => Right(Status.Finished)
+            case InstanceStateName.STOPPED => Right(Status.Finished)
+            case InstanceStateName.SHUTTING_DOWN => Right(Status.Finished)
+            case InstanceStateName.UNKNOWN_TO_SDK_VERSION =>
+              Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
+            case _ => Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
+          }
+        case _ => Left(new Exception("UNKNOWN_TO_SDK_VERSION"))
+      }
+      logger.debug(s"getStatus: result = $res")
+      res
+    } catch {
+      case e: Throwable => Left(e)
     }
-    logger.debug(s"getStatus: result = $res")
-    res
   }
 
   override def terminate(instSpec: JsValue): Either[Throwable, Status.Value] = Try {
