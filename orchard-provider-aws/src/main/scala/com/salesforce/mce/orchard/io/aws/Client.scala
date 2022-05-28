@@ -18,6 +18,10 @@ import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider
 
 object Client {
 
+  def clientRegionOpt: Option[Region] = for {
+    clientRegion <- ProviderSettings().awsClientRegion
+  } yield Region.of(clientRegion)
+
   def staticCredentialsOpt: Option[StaticCredentialsProvider] = for {
     awsAccessKeyId <- ProviderSettings().awsAccessKeyId
     awsSecretKey <- ProviderSettings().awsSecretKey
@@ -25,13 +29,9 @@ object Client {
     AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
   )
 
-  def clientRegionOpt: Option[Region] = for {
-    clientRegion <- ProviderSettings().awsClientRegion
-  } yield Region.of(clientRegion)
-
   def assumeRoleCredentialsOpt(clientType: String): Option[StsAssumeRoleCredentialsProvider] = {
     for {
-      awsRoleArnToAssume <- ProviderSettings().awsRoleArnToAssume
+      awsAssumeRoleArn <- ProviderSettings().awsAssumeRoleArn
     } yield {
 
       val stsClient = staticCredentialsOpt.map { staticCredentials =>
@@ -40,11 +40,12 @@ object Client {
 
       val assumeRoleRequest = AssumeRoleRequest
         .builder()
-        .roleArn(awsRoleArnToAssume)
+        .roleArn(awsAssumeRoleArn)
         .roleSessionName(s"${clientType}Session")
         .build()
 
-      StsAssumeRoleCredentialsProvider.builder()
+      StsAssumeRoleCredentialsProvider
+        .builder()
         .refreshRequest(assumeRoleRequest)
         .stsClient(stsClient)
         .build()
