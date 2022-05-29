@@ -7,6 +7,7 @@ val awsVersion = "2.17.+"
 val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
 val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
 val awsSsm            = "software.amazon.awssdk"     % "ssm"                      % awsVersion
+val awsSts            = "software.amazon.awssdk"     % "sts"                      % awsVersion
 val slick             = "com.typesafe.slick"        %% "slick"                    % slickVersion
 val slickHikaricp     = "com.typesafe.slick"        %% "slick-hikaricp"           % slickVersion
 val postgresql        = "org.postgresql"             % "postgresql"               % "42.3.3"
@@ -77,7 +78,8 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
     libraryDependencies ++= Seq(
       awsEc2,
       awsEmr,
-      awsSsm
+      awsSsm,
+      awsSts
     )
   ).
   dependsOn(orchardCore)

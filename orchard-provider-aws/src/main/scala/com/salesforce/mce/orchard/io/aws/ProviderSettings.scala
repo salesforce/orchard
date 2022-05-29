@@ -19,6 +19,7 @@ case class ProviderSettings(config: Config) {
   lazy val awsAccessKeyId = getConfigString("aws.static.credentials.accessKeyId")
   lazy val awsSecretKey = getConfigString("aws.static.credentials.secretKey")
   lazy val awsClientRegion = getConfigString("aws.client.region")
+  lazy val awsAssumeRoleArn = getConfigString("aws.assume.role.arn")
 }
 
 object ProviderSettings {
