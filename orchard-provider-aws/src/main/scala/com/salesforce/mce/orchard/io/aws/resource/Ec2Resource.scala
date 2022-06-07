@@ -7,7 +7,7 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters.{CollectionHasAsScala, SeqHasAsJava}
 import scala.util.Try
 
 import org.slf4j.LoggerFactory
@@ -43,6 +43,16 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
       builder.instanceMarketOptions(
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
       )
+    }
+    spec.tags match {
+      case None =>
+        logger.debug(s"no tags given")
+      case Some(ts) =>
+        logger.debug(s"spec.tags=${spec.tags}")
+        val tags2 = ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+        builder.tagSpecifications(
+          TagSpecification.builder().resourceType(ResourceType.INSTANCE).tags(tags2: _*).build()
+        )
     }
     val resp = client.runInstances(builder.build())
     client.close()
@@ -150,6 +160,7 @@ object Ec2Resource {
     subnetId: String,
     instanceType: String,
     instanceProfile: String,
+    tags: Option[Seq[AwsTag]],
     spotInstance: Boolean
   )
 
