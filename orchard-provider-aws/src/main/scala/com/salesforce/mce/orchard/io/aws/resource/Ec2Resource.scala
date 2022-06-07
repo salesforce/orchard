@@ -7,7 +7,7 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
-import scala.jdk.CollectionConverters.{CollectionHasAsScala, SeqHasAsJava}
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 import scala.util.Try
 
 import org.slf4j.LoggerFactory
