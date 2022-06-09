@@ -9,11 +9,10 @@ package com.salesforce.mce.orchard.io.aws.resource
 
 import scala.util.Try
 
+import org.slf4j.LoggerFactory
 import play.api.libs.json.JsValue
-
-import software.amazon.awssdk.services.emr.model._
-
 import play.api.libs.json._
+import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.io.ResourceIO
@@ -21,6 +20,7 @@ import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 
 case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO {
+  private val logger = LoggerFactory.getLogger(getClass)
 
   private val releaseLabel = spec.releaseLabel
   private val instancesConfig = spec.instancesConfig
@@ -29,6 +29,14 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
   val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$name/")
 
   override def create(): Either[Throwable, JsValue] = Try {
+    val awsTags = spec.tags match {
+      case None =>
+        logger.debug(s"no tags given")
+        List.empty[Tag]
+      case Some(ts) =>
+        logger.debug(s"spec.tags=${spec.tags}")
+        ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+    }
     val response = Client
       .emr()
       .runJobFlow(
@@ -41,6 +49,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .applications(applications: _*)
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
+              .tags(awsTags: _*)
               .instances(
                 JobFlowInstancesConfig
                   .builder()
@@ -55,7 +64,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
           )((r, uri) => r.logUri(uri))
           .build()
       )
-
+    logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }.toEither
 
@@ -131,6 +140,7 @@ object EmrResource {
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
+    tags: Option[Seq[AwsTag]],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
