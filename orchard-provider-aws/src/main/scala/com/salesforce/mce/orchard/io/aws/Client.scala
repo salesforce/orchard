@@ -35,9 +35,7 @@ object Client {
     } yield {
 
       val stsClientBuilder = clientRegionOpt
-        .foldLeft(StsClient.builder())((builder, region) =>
-          builder.region(region)
-        )
+        .foldLeft(StsClient.builder())(_.region(_))
 
       val stsClient = staticCredentialsOpt
         .fold(stsClientBuilder.build())(
@@ -61,9 +59,7 @@ object Client {
   def ec2(): Ec2Client = {
 
     val clientBuilder = clientRegionOpt
-      .foldLeft(Ec2Client.builder())((builder, region) =>
-        builder.region(region)
-      )
+      .foldLeft(Ec2Client.builder())(_.region(_))
 
     assumeRoleCredentialsOpt(Ec2Client.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
@@ -78,9 +74,7 @@ object Client {
   def emr(): EmrClient = {
 
     val clientBuilder = clientRegionOpt
-      .foldLeft(EmrClient.builder())((builder, region) =>
-        builder.region(region)
-      )
+      .foldLeft(EmrClient.builder())(_.region(_))
 
     assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
@@ -95,9 +89,7 @@ object Client {
   def ssm(): SsmClient = {
 
     val clientBuilder = clientRegionOpt
-      .foldLeft(SsmClient.builder())((builder, region) =>
-        builder.region(region)
-      )
+      .foldLeft(SsmClient.builder())(_.region(_))
 
     assumeRoleCredentialsOpt(SsmClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
