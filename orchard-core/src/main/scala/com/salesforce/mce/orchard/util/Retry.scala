@@ -1,8 +1,8 @@
 package com.salesforce.mce.orchard.util
 
-import com.krux.stubborn.policy.{ExponentialBackoff, Policy}
-
 import scala.util.{Failure, Try}
+
+import com.krux.stubborn.policy.{ExponentialBackoff, Policy}
 
 object Retry {
   val maxRetries = 3
