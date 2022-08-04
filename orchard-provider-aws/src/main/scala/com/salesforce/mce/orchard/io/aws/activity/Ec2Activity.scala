@@ -8,16 +8,14 @@
 package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters.CollectionHasAsScala
-
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsValue
 import software.amazon.awssdk.services.ssm.model._
-
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
-import com.salesforce.mce.orchard.io.aws.util.Retry
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
+import com.salesforce.mce.orchard.util.Retry
 
 abstract class Ec2Activity(
   name: String,

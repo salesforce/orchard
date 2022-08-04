@@ -1,8 +1,6 @@
-package com.salesforce.mce.orchard.aws.util
+package com.salesforce.mce.orchard.util
 
 import org.scalatest.wordspec.AnyWordSpec
-
-import com.salesforce.mce.orchard.io.aws.util.Retry
 
 class RetrySpec extends AnyWordSpec {
   "Retry" when {

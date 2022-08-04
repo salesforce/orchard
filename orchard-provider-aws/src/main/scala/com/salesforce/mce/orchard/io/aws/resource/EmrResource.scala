@@ -10,12 +10,11 @@ package com.salesforce.mce.orchard.io.aws.resource
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
-
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
-import com.salesforce.mce.orchard.io.aws.util.Retry
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
+import com.salesforce.mce.orchard.util.Retry
 
 case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)

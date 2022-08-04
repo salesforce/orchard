@@ -8,15 +8,13 @@
 package com.salesforce.mce.orchard.io.aws.resource
 
 import scala.jdk.CollectionConverters.CollectionHasAsScala
-
 import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsResult, JsValue, Json, Reads, Writes}
 import software.amazon.awssdk.services.ec2.model._
-
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.io.aws.Client
-import com.salesforce.mce.orchard.io.aws.util.Retry
 import com.salesforce.mce.orchard.model.Status
+import com.salesforce.mce.orchard.util.Retry
 
 case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
