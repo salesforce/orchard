@@ -7,14 +7,12 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
-import scala.util.Try
-
 import org.slf4j.LoggerFactory
-import play.api.libs.json.JsValue
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
+import com.salesforce.mce.orchard.io.aws.util.Retry
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
@@ -28,7 +26,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$name/")
 
-  override def create(): Either[Throwable, JsValue] = Try {
+  override def create(): Either[Throwable, JsValue] = Retry() {
     val awsTags = spec.tags match {
       case None =>
         logger.debug(s"no tags given")
@@ -69,9 +67,11 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
   }.toEither
 
   private def getStatus(spec: EmrResource.InstSpec) = {
-    val response = Client
-      .emr()
-      .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
+    val response = Retry() {
+      Client
+        .emr()
+        .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
+    }.get
 
     response.cluster().status().state() match {
       case ClusterState.BOOTSTRAPPING =>
@@ -103,9 +103,11 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   // private
   def terminate(spec: EmrResource.InstSpec) = {
-    Client
-      .emr()
-      .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
+    Retry() {
+      Client
+        .emr()
+        .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
+    }
 
     Status.Finished
   }

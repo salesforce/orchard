@@ -8,20 +8,20 @@
 package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters._
-import scala.util.Try
 
 import play.api.libs.json.{JsResult, JsValue, Json}
 import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
+import com.salesforce.mce.orchard.io.aws.util.Retry
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 
 case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: String)
     extends ActivityIO {
 
-  override def create(): Either[Throwable, JsValue] = Try {
+  override def create(): Either[Throwable, JsValue] = Retry() {
     val response = Client
       .emr()
       .addJobFlowSteps(
@@ -53,19 +53,21 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
 
   private def getProgress(steps: Seq[String]) = {
     val client = Client.emr()
-    val statuses = steps.map { stepId =>
-      client
-        .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())
-        .step()
-        .status()
-        .state()
-    }
+    val statuses = Retry() {
+      steps.map { stepId =>
+        client
+          .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())
+          .step()
+          .status()
+          .state()
+      }
+    }.get
 
     if (statuses.forall(ss => ss == StepState.COMPLETED)) {
       Status.Finished
-    } else if (statuses.exists(ss => ss == StepState.FAILED)) {
+    } else if (statuses.contains(StepState.FAILED)) {
       Status.Failed
-    } else if (statuses.exists(ss => ss == StepState.CANCELLED)) {
+    } else if (statuses.contains(StepState.CANCELLED)) {
       Status.Canceled
     } else {
       Status.Running

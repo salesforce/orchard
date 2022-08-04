@@ -10,12 +10,14 @@ package com.salesforce.mce.orchard.io.aws.activity
 import java.time.{LocalDateTime, ZoneOffset}
 import java.time.temporal.ChronoUnit
 import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
-import scala.util.Try
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsResult, JsValue, Json}
 import software.amazon.awssdk.services.ssm.model.SendCommandRequest
+
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
+import com.salesforce.mce.orchard.io.aws.util.Retry
 
 case class ShellScriptActivity(
   name: String,
@@ -34,7 +36,7 @@ case class ShellScriptActivity(
    * create activity via AWS SSM SendCommand to an ec2Instance
    * @return  SSM command-id in a single entry list
    */
-  override def create(): Either[Throwable, JsValue] = Try {
+  override def create(): Either[Throwable, JsValue] = Retry() {
 
     logger.debug(
       s"create: name=$name ec2InstanceId=$ec2InstanceId scriptLocation=$scriptLocation args=$args"
