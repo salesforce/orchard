@@ -6,6 +6,7 @@ import com.krux.stubborn.policy.Policy
 import scala.util.{Failure, Try}
 
 object Retry extends RetryDefaults {
+
   @annotation.tailrec
   def apply[T](numTries: Int = defaultMaxRetry, policy: Policy = defaultPolicy)(
     fn: => T
