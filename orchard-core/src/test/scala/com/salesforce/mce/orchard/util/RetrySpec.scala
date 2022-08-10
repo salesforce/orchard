@@ -14,7 +14,6 @@ class RetrySpec extends AnyWordSpec {
       "try to execute N times before failing using opt" in {
         val numRetries = 3
         var numRuns = -1
-
         catching(classOf[RuntimeException]).opt {
           Retryable.retry(maxRetry = numRetries, policy = testPolicy) {
             numRuns += 1
