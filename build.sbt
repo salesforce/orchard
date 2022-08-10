@@ -1,5 +1,3 @@
-
-
 val slickVersion = "3.3.3"
 val akkaVersion = "2.6.19"
 // make sure this is the same as the playWS's dependency

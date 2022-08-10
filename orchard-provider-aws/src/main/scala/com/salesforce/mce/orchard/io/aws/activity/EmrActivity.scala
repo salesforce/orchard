@@ -8,50 +8,57 @@
 package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.Exception.catching
+
 import play.api.libs.json.{JsResult, JsValue, Json}
+import software.amazon.awssdk.core.exception.SdkException
 import software.amazon.awssdk.services.emr.model._
+
+import com.krux.stubborn.Retryable
+import com.krux.stubborn.policy.ExponentialBackoff
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.util.Retry
 
 case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: String)
     extends ActivityIO {
 
-  override def create(): Either[Throwable, JsValue] = Retry() {
-    val response = Client
-      .emr()
-      .addJobFlowSteps(
-        AddJobFlowStepsRequest
-          .builder()
-          .jobFlowId(clusterId)
-          .steps(
-            steps.map { step =>
-              StepConfig
-                .builder()
-                .name(name)
-                .actionOnFailure(ActionOnFailure.CONTINUE)
-                .hadoopJarStep(
-                  HadoopJarStepConfig
+  override def create(): Either[Throwable, JsValue] = catching(classOf[SdkException]) either
+    Retryable
+      .retry(policy = ExponentialBackoff()) {
+        val response = Client
+          .emr()
+          .addJobFlowSteps(
+            AddJobFlowStepsRequest
+              .builder()
+              .jobFlowId(clusterId)
+              .steps(
+                steps.map { step =>
+                  StepConfig
                     .builder()
-                    .jar(step.jar)
-                    .args(step.args: _*)
+                    .name(name)
+                    .actionOnFailure(ActionOnFailure.CONTINUE)
+                    .hadoopJarStep(
+                      HadoopJarStepConfig
+                        .builder()
+                        .jar(step.jar)
+                        .args(step.args: _*)
+                        .build()
+                    )
                     .build()
-                )
-                .build()
-            }.asJava
+                }.asJava
+              )
+              .build()
           )
-          .build()
-      )
 
-    val stepIds = response.stepIds().asScala
-    Json.toJson(stepIds)
-  }.toEither
+        val stepIds = response.stepIds().asScala
+        Json.toJson(stepIds)
+      }
 
   private def getProgress(steps: Seq[String]) = {
     val client = Client.emr()
-    val statuses = Retry() {
+    val statuses = catching(classOf[SdkException]).opt {
       steps.map { stepId =>
         client
           .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())

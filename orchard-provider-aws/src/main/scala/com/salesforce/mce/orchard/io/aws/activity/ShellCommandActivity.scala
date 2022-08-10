@@ -9,13 +9,19 @@ package com.salesforce.mce.orchard.io.aws.activity
 
 import java.time.{LocalDateTime, ZoneOffset}
 import java.time.temporal.ChronoUnit
+
 import scala.jdk.CollectionConverters.{MapHasAsJava, SeqHasAsJava}
+import scala.util.control.Exception.catching
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsResult, JsValue, Json}
 import software.amazon.awssdk.services.ssm.model.SendCommandRequest
+import software.amazon.awssdk.core.exception.SdkException
+
+import com.krux.stubborn.Retryable
+import com.krux.stubborn.policy.ExponentialBackoff
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
-import com.salesforce.mce.orchard.util.Retry
 
 case class ShellCommandActivity(
   name: String,
@@ -33,38 +39,39 @@ case class ShellCommandActivity(
    * create activity via AWS SSM SendCommand to an ec2Instance
    * @return  SSM command-id in a single entry list
    */
-  override def create(): Either[Throwable, JsValue] = Retry() {
+  override def create(): Either[Throwable, JsValue] = catching(classOf[SdkException]) either
+    Retryable
+      .retry(policy = ExponentialBackoff()) {
+        logger.debug(
+          s"create: name=$name ec2InstanceId=$ec2InstanceId cmd lines=${lines.mkString(" ")}."
+        )
+        lines.foreach(c => logger.debug(s"create command=$c"))
 
-    logger.debug(
-      s"create: name=$name ec2InstanceId=$ec2InstanceId cmd lines=${lines.mkString(" ")}."
-    )
-    lines.foreach(c => logger.debug(s"create command=$c"))
+        lazy val ts = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES)
+        val client = Client.ssm()
+        val paraMap = Map(
+          "commands" -> lines.asJava,
+          "executionTimeout" -> List(executionTimeout.toString).asJava
+        )
+        val request =
+          SendCommandRequest
+            .builder()
+            .documentName(RunShellScriptDocument)
+            .instanceIds(ec2InstanceId)
+            .comment(getComment(getClass))
+            .parameters(paraMap.asJava)
+            .timeoutSeconds(deliveryTimeout)
+            .outputS3BucketName(outputS3BucketName)
+            .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
+            .build()
+        val response = client.sendCommand(request)
+        client.close()
+        val command = response.command()
+        val commandId = command.commandId()
+        logger.debug(s"create: sendCommand commandId=$commandId command=${command.toString}")
 
-    lazy val ts = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES)
-    val client = Client.ssm()
-    val paraMap = Map(
-      "commands" -> lines.asJava,
-      "executionTimeout" -> List(executionTimeout.toString).asJava
-    )
-    val request =
-      SendCommandRequest
-        .builder()
-        .documentName(RunShellScriptDocument)
-        .instanceIds(ec2InstanceId)
-        .comment(getComment(getClass))
-        .parameters(paraMap.asJava)
-        .timeoutSeconds(deliveryTimeout)
-        .outputS3BucketName(outputS3BucketName)
-        .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
-        .build()
-    val response = client.sendCommand(request)
-    client.close()
-    val command = response.command()
-    val commandId = command.commandId()
-    logger.debug(s"create: sendCommand commandId=$commandId command=${command.toString}")
-
-    Json.toJson(List(commandId))
-  }.toEither
+        Json.toJson(List(commandId))
+      }
 
   override def toString: String = {
     s"ShellCommandActivity: $name lines=$lines outputS3BucketName=$outputS3BucketName " +

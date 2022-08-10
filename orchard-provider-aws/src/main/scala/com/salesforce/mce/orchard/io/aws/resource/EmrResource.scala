@@ -7,14 +7,19 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
+import scala.util.control.Exception.catching
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
+import software.amazon.awssdk.core.exception.SdkException
+
+import com.krux.stubborn.Retryable
+import com.krux.stubborn.policy.ExponentialBackoff
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.util.Retry
 
 case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -25,51 +30,57 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$name/")
 
-  override def create(): Either[Throwable, JsValue] = Retry() {
-    val awsTags = spec.tags match {
-      case None =>
-        logger.debug(s"no tags given")
-        List.empty[Tag]
-      case Some(ts) =>
-        logger.debug(s"spec.tags=${spec.tags}")
-        ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
-    }
-    val response = Client
-      .emr()
-      .runJobFlow(
-        loggingUriBase
-          .foldLeft(
-            RunJobFlowRequest
-              .builder()
-              .name(name)
-              .releaseLabel(releaseLabel)
-              .applications(applications: _*)
-              .serviceRole(spec.serviceRole)
-              .jobFlowRole(spec.resourceRole)
-              .tags(awsTags: _*)
-              .instances(
-                JobFlowInstancesConfig
+  override def create(): Either[Throwable, JsValue] = catching(classOf[SdkException]) either {
+    Retryable
+      .retry(policy = ExponentialBackoff()) {
+        val awsTags = spec.tags match {
+          case None =>
+            logger.debug(s"no tags given")
+            List.empty[Tag]
+          case Some(ts) =>
+            logger.debug(s"spec.tags=${spec.tags}")
+            ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+        }
+        val response = Client
+          .emr()
+          .runJobFlow(
+            loggingUriBase
+              .foldLeft(
+                RunJobFlowRequest
                   .builder()
-                  .ec2SubnetId(instancesConfig.subnetId)
-                  .ec2KeyName(instancesConfig.ec2KeyName)
-                  .instanceCount(instancesConfig.instanceCount)
-                  .masterInstanceType(instancesConfig.masterInstanceType)
-                  .slaveInstanceType(instancesConfig.slaveInstanceType)
-                  .keepJobFlowAliveWhenNoSteps(true)
-                  .build()
-              )
-          )((r, uri) => r.logUri(uri))
-          .build()
-      )
-    logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
-    Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
-  }.toEither
+                  .name(name)
+                  .releaseLabel(releaseLabel)
+                  .applications(applications: _*)
+                  .serviceRole(spec.serviceRole)
+                  .jobFlowRole(spec.resourceRole)
+                  .tags(awsTags: _*)
+                  .instances(
+                    JobFlowInstancesConfig
+                      .builder()
+                      .ec2SubnetId(instancesConfig.subnetId)
+                      .ec2KeyName(instancesConfig.ec2KeyName)
+                      .instanceCount(instancesConfig.instanceCount)
+                      .masterInstanceType(instancesConfig.masterInstanceType)
+                      .slaveInstanceType(instancesConfig.slaveInstanceType)
+                      .keepJobFlowAliveWhenNoSteps(true)
+                      .build()
+                  )
+              )((r, uri) => r.logUri(uri))
+              .build()
+          )
+        logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
+        Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
+      }
+  }
 
   private def getStatus(spec: EmrResource.InstSpec) = {
-    val response = Retry() {
-      Client
-        .emr()
-        .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
+    val response = catching(classOf[SdkException]).opt {
+      Retryable
+        .retry(policy = ExponentialBackoff()) {
+          Client
+            .emr()
+            .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
+        }
     }.get
 
     response.cluster().status().state() match {
@@ -102,11 +113,12 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   // private
   def terminate(spec: EmrResource.InstSpec) = {
-    Retry() {
-      Client
-        .emr()
-        .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
-    }
+    Retryable
+      .retry(policy = ExponentialBackoff()) {
+        Client
+          .emr()
+          .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
+      }
 
     Status.Finished
   }

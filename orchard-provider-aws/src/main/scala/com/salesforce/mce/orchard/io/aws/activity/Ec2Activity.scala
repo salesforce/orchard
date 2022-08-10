@@ -8,14 +8,17 @@
 package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters.CollectionHasAsScala
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json.JsValue
 import software.amazon.awssdk.services.ssm.model._
+
+import com.krux.stubborn.Retryable
+import com.krux.stubborn.policy.ExponentialBackoff
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.util.Retry
 
 abstract class Ec2Activity(
   name: String,
@@ -41,11 +44,12 @@ abstract class Ec2Activity(
 
     logger.debug(s"getProgress: commands=$commands")
     val client = Client.ssm()
-    val resp = Retry() {
-      client.listCommands(
-        ListCommandsRequest.builder().commandId(commands.head).instanceId(ec2IstanceId).build()
-      )
-    }.get
+    val resp = Retryable
+      .retry(policy = ExponentialBackoff()) {
+        client.listCommands(
+          ListCommandsRequest.builder().commandId(commands.head).instanceId(ec2IstanceId).build()
+        )
+      }
     client.close()
     val statuses = resp
       .commands()
@@ -96,7 +100,7 @@ abstract class Ec2Activity(
   private def terminate(commands: Seq[String]) = {
     logger.debug(s"terminate: commands=$commands")
     val client = Client.ssm()
-    Retry() {
+    Retryable.retry(policy = ExponentialBackoff()) {
       client.cancelCommand(
         CancelCommandRequest.builder().commandId(commands.head).instanceIds(ec2IstanceId).build()
       )
