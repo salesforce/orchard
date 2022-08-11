@@ -43,6 +43,7 @@ case class ShellScriptActivity(
   override def create(): Either[Throwable, JsValue] = catching(classOf[SdkException]) either
     Retryable
       .retry(policy = ExponentialBackoff()) {
+
         logger.debug(
           s"create: name=$name ec2InstanceId=$ec2InstanceId scriptLocation=$scriptLocation args=$args"
         )

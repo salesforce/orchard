@@ -157,9 +157,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
           val instanceLifecycle = describeResponse
             .reservations()
             .asScala
-            .flatMap {
-              _.instances().asScala.map(_.instanceLifecycleAsString())
-            }
+            .flatMap { _.instances().asScala.map(_.instanceLifecycleAsString()) }
             .head
           logger.debug(s"terminate: instanceLifecycle=$instanceLifecycle")
           if (!"spot".equals(instanceLifecycle)) { // default setting spot instance can be terminated (not stopped)
