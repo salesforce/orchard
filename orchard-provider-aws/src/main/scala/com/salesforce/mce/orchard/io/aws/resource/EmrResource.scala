@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
 
-import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
+import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.Retry
