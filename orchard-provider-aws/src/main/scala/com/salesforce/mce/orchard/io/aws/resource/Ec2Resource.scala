@@ -8,22 +8,20 @@
 package com.salesforce.mce.orchard.io.aws.resource
 
 import scala.jdk.CollectionConverters.CollectionHasAsScala
-import scala.util.Try
 
 import org.slf4j.LoggerFactory
-import play.api.libs.json.{JsResult, JsValue, Json, Reads, Writes}
-import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest
-import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse
+import play.api.libs.json._
 import software.amazon.awssdk.services.ec2.model._
 
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.model.Status
+import com.salesforce.mce.orchard.util.Retry
 
 case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  override def create(): Either[Throwable, JsValue] = Try {
+  override def create(): Either[Throwable, JsValue] = Retry() {
     logger.debug(
       s"create: spec subnetId=${spec.subnetId} spec=$spec"
     )
@@ -51,7 +49,11 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         logger.debug(s"spec.tags=${spec.tags}")
         val tags2 = ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
         builder.tagSpecifications(
-          TagSpecification.builder().resourceType(ResourceType.INSTANCE).tags(tags2: _*).build()
+          TagSpecification
+            .builder()
+            .resourceType(ResourceType.INSTANCE)
+            .tags(tags2: _*)
+            .build()
         )
     }
     val resp = client.runInstances(builder.build())
@@ -72,13 +74,15 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
    */
   private def isSsmVisible(instSpec: JsValue): Boolean = {
     val ssmClient = Client.ssm()
-    val isVisible = ssmClient
-      .describeInstanceInformation()
-      .instanceInformationList()
-      .asScala
-      .map(_.instanceId())
-      .toSet
-      .contains((instSpec \ "ec2InstanceId").as[String])
+    val isVisible = Retry() {
+      ssmClient
+        .describeInstanceInformation()
+        .instanceInformationList()
+        .asScala
+        .map(_.instanceId())
+        .toSet
+        .contains((instSpec \ "ec2InstanceId").as[String])
+    }.get
     ssmClient.close()
     isVisible
   }
@@ -88,12 +92,15 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     val client = Client.ec2()
     val ec2InstanceId = (instSpec \ "ec2InstanceId").as[String]
     try {
-      val response: DescribeInstancesResponse = client.describeInstances(
-        DescribeInstancesRequest
-          .builder()
-          .instanceIds(ec2InstanceId)
-          .build()
-      )
+      val response: DescribeInstancesResponse = Retry() {
+        client.describeInstances(
+          DescribeInstancesRequest
+            .builder()
+            .instanceIds(ec2InstanceId)
+            .build()
+        )
+      }.get
+
       val state = response
         .reservations()
         .asScala
@@ -126,26 +133,27 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     }
   }
 
-  override def terminate(instSpec: JsValue): Either[Throwable, Status.Value] = Try {
-    logger.debug(s"terminate: instSpec=${instSpec.toString()}")
-    val client = Client.ec2()
-    val id = (instSpec \ "ec2InstanceId").as[String]
-    val describeResponse =
-      client.describeInstances(DescribeInstancesRequest.builder().instanceIds(id).build())
-    val instanceLifecycle = describeResponse
-      .reservations()
-      .asScala
-      .flatMap { _.instances().asScala.map(_.instanceLifecycleAsString()) }
-      .head
-    logger.debug(s"terminate: instanceLifecycle=$instanceLifecycle")
-    if (!"spot".equals(instanceLifecycle)) { // default setting spot instance can be terminated (not stopped)
-      client.stopInstances(StopInstancesRequest.builder().instanceIds(id).build())
-    }
-    client.terminateInstances(TerminateInstancesRequest.builder().instanceIds(id).build())
-    client.close()
-    logger.debug(s"terminate: stopped and terminated instanceId=$id")
-    Status.Finished
-  }.toEither
+  override def terminate(instSpec: JsValue): Either[Throwable, Status.Value] =
+    Retry() {
+      logger.debug(s"terminate: instSpec=${instSpec.toString()}")
+      val client = Client.ec2()
+      val id = (instSpec \ "ec2InstanceId").as[String]
+      val describeResponse =
+        client.describeInstances(DescribeInstancesRequest.builder().instanceIds(id).build())
+      val instanceLifecycle = describeResponse
+        .reservations()
+        .asScala
+        .flatMap { _.instances().asScala.map(_.instanceLifecycleAsString()) }
+        .head
+      logger.debug(s"terminate: instanceLifecycle=$instanceLifecycle")
+      if (!"spot".equals(instanceLifecycle)) { // default setting spot instance can be terminated (not stopped)
+        client.stopInstances(StopInstancesRequest.builder().instanceIds(id).build())
+      }
+      client.terminateInstances(TerminateInstancesRequest.builder().instanceIds(id).build())
+      client.close()
+      logger.debug(s"terminate: stopped and terminated instanceId=$id")
+      Status.Finished
+    }.toEither
 
 }
 

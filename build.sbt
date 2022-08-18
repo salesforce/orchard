@@ -3,6 +3,7 @@ val akkaVersion = "2.6.19"
 // make sure this is the same as the playWS's dependency
 val playJsonVersion = "2.9.2"
 val awsVersion = "2.17.+"
+val stubbornVersion = "3.0.3"
 
 val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
 val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
@@ -17,6 +18,7 @@ val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.11" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 val logback           = "ch.qos.logback"             % "logback-classic"          % "1.2.11" % Test
+val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
@@ -53,7 +55,8 @@ lazy val orchardCore = (project in file("orchard-core")).
       playJson,
       akkaActor,
       akkaTestkit,
-      logback
+      logback,
+      stubbornArtifact
     )
   )
 
