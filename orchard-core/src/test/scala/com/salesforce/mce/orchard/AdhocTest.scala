@@ -1,7 +1,5 @@
 package com.salesforce.mce.orchard
 
-import scala.concurrent.duration._
-
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.AbstractBehavior
 import akka.actor.typed.Behavior
@@ -52,7 +50,7 @@ class AdhocActor(context: ActorContext[AdhocActor.Msg]) extends AbstractBehavior
 
 class AdhocActorSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike {
 
-  import AdhocActor._
+  // import AdhocActor._
 
   "test" in {
 

@@ -3,7 +3,7 @@ val akkaVersion = "2.6.19"
 // make sure this is the same as the playWS's dependency
 val playJsonVersion = "2.9.2"
 val awsVersion = "2.17.+"
-val stubbornVersion = "3.0.3"
+val stubbornVersion = "3.0.4"
 
 val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
 val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
@@ -11,11 +11,11 @@ val awsSsm            = "software.amazon.awssdk"     % "ssm"                    
 val awsSts            = "software.amazon.awssdk"     % "sts"                      % awsVersion
 val slick             = "com.typesafe.slick"        %% "slick"                    % slickVersion
 val slickHikaricp     = "com.typesafe.slick"        %% "slick-hikaricp"           % slickVersion
-val postgresql        = "org.postgresql"             % "postgresql"               % "42.3.3"
+val postgresql        = "org.postgresql"             % "postgresql"               % "42.5.0"
 val playJson          = "com.typesafe.play"         %% "play-json"                % playJsonVersion
 val akkaActor         = "com.typesafe.akka"         %% "akka-actor-typed"         % akkaVersion
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.11" % Test
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.13" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 val logback           = "ch.qos.logback"             % "logback-classic"          % "1.2.11" % Test
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion

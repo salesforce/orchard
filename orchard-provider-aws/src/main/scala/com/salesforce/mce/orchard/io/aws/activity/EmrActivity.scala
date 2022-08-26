@@ -16,12 +16,12 @@ import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.util.Retry
+import com.salesforce.mce.orchard.util.RetryHelper._
 
 case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: String)
     extends ActivityIO {
 
-  override def create(): Either[Throwable, JsValue] = Retry() {
+  override def create(): Either[Throwable, JsValue] = retryToEither {
     val response = Client
       .emr()
       .addJobFlowSteps(
@@ -49,19 +49,19 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
 
     val stepIds = response.stepIds().asScala
     Json.toJson(stepIds)
-  }.toEither
+  }
 
   private def getProgress(steps: Seq[String]) = {
     val client = Client.emr()
-    val statuses = Retry() {
-      steps.map { stepId =>
+    val statuses = steps
+      .map { stepId =>
         client
           .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())
           .step()
           .status()
           .state()
       }
-    }.get
+      .retry()
 
     if (statuses.forall(ss => ss == StepState.COMPLETED)) {
       Status.Finished

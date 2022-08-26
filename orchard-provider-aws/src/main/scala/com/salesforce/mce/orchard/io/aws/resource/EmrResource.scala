@@ -15,7 +15,7 @@ import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.util.Retry
+import com.salesforce.mce.orchard.util.RetryHelper._
 
 case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -26,7 +26,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$name/")
 
-  override def create(): Either[Throwable, JsValue] = Retry() {
+  override def create(): Either[Throwable, JsValue] = retryToEither {
     val awsTags = spec.tags match {
       case None =>
         logger.debug(s"no tags given")
@@ -64,14 +64,13 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       )
     logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
-  }.toEither
+  }
 
   private def getStatus(spec: EmrResource.InstSpec) = {
-    val response = Retry() {
-      Client
-        .emr()
-        .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
-    }.get
+    val response = Client
+      .emr()
+      .describeCluster(DescribeClusterRequest.builder().clusterId(spec.clusterId).build())
+      .retry()
 
     response.cluster().status().state() match {
       case ClusterState.BOOTSTRAPPING =>
@@ -103,11 +102,10 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
   // private
   def terminate(spec: EmrResource.InstSpec) = {
-    Retry() {
-      Client
-        .emr()
-        .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
-    }
+    Client
+      .emr()
+      .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
+      .retry()
 
     Status.Finished
   }
