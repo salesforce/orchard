@@ -12,13 +12,10 @@ class RetryHelperSpec extends AnyWordSpec {
   "Using Retry helper object idiom" when {
     "it runs" should {
       "Work with either" in {
+        import RetryHelper._
         val expected = 1
-        val maxRetries = 3
-        val resultTry = Retry(maxRetries, testPolicy) {
-          expected
-        }
-        assert(resultTry.toEither.isRight)
-        assert(resultTry.get == expected)
+        val result = retryToEither(expected)
+        assert(result === Right(expected))
       }
     }
   }

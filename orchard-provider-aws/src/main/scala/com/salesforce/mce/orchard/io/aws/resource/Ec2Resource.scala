@@ -13,15 +13,15 @@ import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.ec2.model._
 
-import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.io.aws.Client
+import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
-import com.salesforce.mce.orchard.util.Retry
+import com.salesforce.mce.orchard.util.RetryHelper._
 
 case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  override def create(): Either[Throwable, JsValue] = Retry() {
+  override def create(): Either[Throwable, JsValue] = retryToEither {
     logger.debug(
       s"create: spec subnetId=${spec.subnetId} spec=$spec"
     )
@@ -66,7 +66,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         }
     }
     Json.toJson(Ec2Resource.InstSpec(resp.instances().asScala.head.instanceId()))
-  }.toEither
+  }
 
   /**
    * @param instSpec
@@ -74,7 +74,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
    */
   private def isSsmVisible(instSpec: JsValue): Boolean = {
     val ssmClient = Client.ssm()
-    val isVisible = Retry() {
+    val isVisible =
       ssmClient
         .describeInstanceInformation()
         .instanceInformationList()
@@ -82,7 +82,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         .map(_.instanceId())
         .toSet
         .contains((instSpec \ "ec2InstanceId").as[String])
-    }.get
+        .retry()
     ssmClient.close()
     isVisible
   }
@@ -92,14 +92,14 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     val client = Client.ec2()
     val ec2InstanceId = (instSpec \ "ec2InstanceId").as[String]
     try {
-      val response: DescribeInstancesResponse = Retry() {
-        client.describeInstances(
+      val response: DescribeInstancesResponse = client
+        .describeInstances(
           DescribeInstancesRequest
             .builder()
             .instanceIds(ec2InstanceId)
             .build()
         )
-      }.get
+        .retry()
 
       val state = response
         .reservations()
@@ -133,27 +133,26 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     }
   }
 
-  override def terminate(instSpec: JsValue): Either[Throwable, Status.Value] =
-    Retry() {
-      logger.debug(s"terminate: instSpec=${instSpec.toString()}")
-      val client = Client.ec2()
-      val id = (instSpec \ "ec2InstanceId").as[String]
-      val describeResponse =
-        client.describeInstances(DescribeInstancesRequest.builder().instanceIds(id).build())
-      val instanceLifecycle = describeResponse
-        .reservations()
-        .asScala
-        .flatMap { _.instances().asScala.map(_.instanceLifecycleAsString()) }
-        .head
-      logger.debug(s"terminate: instanceLifecycle=$instanceLifecycle")
-      if (!"spot".equals(instanceLifecycle)) { // default setting spot instance can be terminated (not stopped)
-        client.stopInstances(StopInstancesRequest.builder().instanceIds(id).build())
-      }
-      client.terminateInstances(TerminateInstancesRequest.builder().instanceIds(id).build())
-      client.close()
-      logger.debug(s"terminate: stopped and terminated instanceId=$id")
-      Status.Finished
-    }.toEither
+  override def terminate(instSpec: JsValue): Either[Throwable, Status.Value] = retryToEither {
+    logger.debug(s"terminate: instSpec=${instSpec.toString()}")
+    val client = Client.ec2()
+    val id = (instSpec \ "ec2InstanceId").as[String]
+    val describeResponse =
+      client.describeInstances(DescribeInstancesRequest.builder().instanceIds(id).build())
+    val instanceLifecycle = describeResponse
+      .reservations()
+      .asScala
+      .flatMap { _.instances().asScala.map(_.instanceLifecycleAsString()) }
+      .head
+    logger.debug(s"terminate: instanceLifecycle=$instanceLifecycle")
+    if (!"spot".equals(instanceLifecycle)) { // default setting spot instance can be terminated (not stopped)
+      client.stopInstances(StopInstancesRequest.builder().instanceIds(id).build())
+    }
+    client.terminateInstances(TerminateInstancesRequest.builder().instanceIds(id).build())
+    client.close()
+    logger.debug(s"terminate: stopped and terminated instanceId=$id")
+    Status.Finished
+  }
 
 }
 
