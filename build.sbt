@@ -74,7 +74,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
     dependencyOverrides ++= Seq(
       // fix https://nvd.nist.gov/vuln/detail/CVE-2020-36518
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.13.4",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.13.8"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.13.4"
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
