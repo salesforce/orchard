@@ -70,6 +70,10 @@ lazy val orchardWS = (project in file("orchard-ws")).
     libraryDependencies ++= Seq(
       guice,
       scalaPlusPlay
+    ),
+    dependencyOverrides ++= Seq(
+      // fix https://nvd.nist.gov/vuln/detail/CVE-2020-36518
+      "com.fasterxml.jackson.core" % "jackson-databind" % "2.13.4"
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
