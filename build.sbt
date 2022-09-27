@@ -72,7 +72,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       scalaPlusPlay
     ),
     dependencyOverrides ++= Seq(
-      "com.fasterxml.jackson.core" % "jackson-databind" % "2.13.2.1"
+      "com.fasterxml.jackson.core" % "jackson-databind" % "2.13.4"
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
