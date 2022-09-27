@@ -72,6 +72,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       scalaPlusPlay
     ),
     dependencyOverrides ++= Seq(
+      // fix https://nvd.nist.gov/vuln/detail/CVE-2020-36518
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.13.4"
     )
   ).
