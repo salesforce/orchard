@@ -22,7 +22,6 @@ val stubbornArtifact  = "com.krux"                  %% "stubborn"               
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  // fix https://nvd.nist.gov/vuln/detail/CVE-2022-36944
   scalaVersion := "2.13.9",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
