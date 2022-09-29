@@ -20,7 +20,6 @@ val akkaStream         = "com.typesafe.akka"       %% "akka-stream"             
 val akkaSerJackson    = "com.typesafe.akka"       %% "akka-serialization-jackson" % akkaVersion
 
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
-// akka-protobuf-v3, akka-serialization-jackson, akka-stream
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.14" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
