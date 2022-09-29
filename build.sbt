@@ -22,7 +22,7 @@ val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.14" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.1" % Test
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.2.11" % Test
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 
 lazy val commonSettings = Seq(
