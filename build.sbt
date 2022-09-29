@@ -1,23 +1,28 @@
-val slickVersion = "3.3.3"
-val akkaVersion = "2.6.19"
-// make sure this is the same as the playWS's dependency
-val playJsonVersion = "2.9.2"
+val slickVersion = "3.4.1"
+val akkaVersion = "2.6.20"
+val playJsonVersion = "2.9.3"
 val awsVersion = "2.17.+"
-val stubbornVersion = "3.0.4"
+val stubbornVersion = "3.0.5"
 
-val awsEc2            = "software.amazon.awssdk"     % "ec2"                      % awsVersion
-val awsEmr            = "software.amazon.awssdk"     % "emr"                      % awsVersion
-val awsSsm            = "software.amazon.awssdk"     % "ssm"                      % awsVersion
-val awsSts            = "software.amazon.awssdk"     % "sts"                      % awsVersion
-val slick             = "com.typesafe.slick"        %% "slick"                    % slickVersion
-val slickHikaricp     = "com.typesafe.slick"        %% "slick-hikaricp"           % slickVersion
-val postgresql        = "org.postgresql"             % "postgresql"               % "42.5.0"
-val playJson          = "com.typesafe.play"         %% "play-json"                % playJsonVersion
-val akkaActor         = "com.typesafe.akka"         %% "akka-actor-typed"         % akkaVersion
+val awsEc2            = "software.amazon.awssdk"   % "ec2"                        % awsVersion
+val awsEmr            = "software.amazon.awssdk"   % "emr"                        % awsVersion
+val awsSsm            = "software.amazon.awssdk"   % "ssm"                        % awsVersion
+val awsSts            = "software.amazon.awssdk"   % "sts"                        % awsVersion
+val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
+val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
+val postgresql        = "org.postgresql"           % "postgresql"                 % "42.5.0"
+val playJson          = "com.typesafe.play"       %% "play-json"                  % playJsonVersion
+val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
+val akkaProtobufV3    = "com.typesafe.akka"       %% "akka-protobuf-v3"           % akkaVersion
+val akkaStream         = "com.typesafe.akka"       %% "akka-stream"                % akkaVersion
+val akkaSerJackson    = "com.typesafe.akka"       %% "akka-serialization-jackson" % akkaVersion
+
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.13" % Test
+// akka-protobuf-v3, akka-serialization-jackson, akka-stream
+
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.14" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.2.11" % Test
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.1" % Test
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 
 lazy val commonSettings = Seq(
@@ -69,7 +74,11 @@ lazy val orchardWS = (project in file("orchard-ws")).
     buildInfoPackage := "com.salesforce.mce.orchard.ws",
     libraryDependencies ++= Seq(
       guice,
-      scalaPlusPlay
+      scalaPlusPlay,
+      akkaActor,
+      akkaProtobufV3,
+      akkaSerJackson,
+      akkaStream
     ),
     dependencyOverrides ++= Seq(
       // fix https://nvd.nist.gov/vuln/detail/CVE-2020-36518
