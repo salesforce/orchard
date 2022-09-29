@@ -1,5 +1,5 @@
 val slickVersion = "3.4.1"
-val akkaVersion = "2.6.20"
+val akkaVersion = "2.6.19"
 val playJsonVersion = "2.9.3"
 val awsVersion = "2.17.+"
 val stubbornVersion = "3.0.5"
