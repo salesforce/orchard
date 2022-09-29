@@ -15,10 +15,6 @@ val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"           
 val postgresql        = "org.postgresql"           % "postgresql"                 % "42.5.0"
 val playJson          = "com.typesafe.play"       %% "play-json"                  % playJsonVersion
 val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
-val akkaProtobufV3    = "com.typesafe.akka"       %% "akka-protobuf-v3"           % akkaVersion
-val akkaStream         = "com.typesafe.akka"       %% "akka-stream"                % akkaVersion
-val akkaSerJackson    = "com.typesafe.akka"       %% "akka-serialization-jackson" % akkaVersion
-
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.14" % Test
@@ -76,10 +72,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
     libraryDependencies ++= Seq(
       guice,
       scalaPlusPlay,
-      akkaActor,
-      akkaProtobufV3,
-      akkaSerJackson,
-      akkaStream
+      akkaActor
     ),
     dependencyOverrides ++= Seq(
       // fix https://nvd.nist.gov/vuln/detail/CVE-2020-36518
