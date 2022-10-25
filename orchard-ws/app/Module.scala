@@ -13,6 +13,7 @@ import play.api.libs.concurrent.AkkaGuiceSupport
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 import services.{ApplicationTimer, AtomicCounter, Counter}
+import services.{Metric, PrometheusMetric}
 import tasks.AuthSettingReloadTask
 import utils.{Authorization, AuthorizationSettings}
 
@@ -39,6 +40,8 @@ class Module extends AbstractModule with AkkaGuiceSupport {
     bind(classOf[Authorization]).toInstance(new Authorization(AuthorizationSettings()))
     // Activate authorization setting reload task
     bind(classOf[AuthSettingReloadTask]).asEagerSingleton()
+    // Activate metrics
+    bind(classOf[Metric]).to(classOf[PrometheusMetric])
 
     bindTypedActor(OrchardSystem.apply(), "orchard-system")
   }

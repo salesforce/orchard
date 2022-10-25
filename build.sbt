@@ -21,6 +21,10 @@ val scalaTestArtifact = "org.scalatest"             %% "scalatest"              
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 val logback           = "ch.qos.logback"             % "logback-classic"          % "1.3.4" % Test
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
+val prometheusClient  = "io.prometheus"              % "simpleclient"             % "0.16.0"
+val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % "0.16.0"
+val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"     % "0.16.0"
+
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
@@ -71,6 +75,9 @@ lazy val orchardWS = (project in file("orchard-ws")).
     buildInfoPackage := "com.salesforce.mce.orchard.ws",
     libraryDependencies ++= Seq(
       guice,
+      prometheusClient,
+      prometheusCommon,
+      prometheusHotSpot,
       scalaPlusPlay
     ),
     dependencyOverrides ++= Seq(
