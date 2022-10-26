@@ -1,3 +1,5 @@
+import io.prometheus.client.CollectorRegistry
+import org.scalatest.BeforeAndAfterEach
 import org.scalatestplus.play._
 import org.scalatestplus.play.guice.GuiceOneServerPerTest
 
@@ -6,7 +8,11 @@ import org.scalatestplus.play.guice.GuiceOneServerPerTest
  */
 class BrowserSpec
     extends PlaySpec with OneBrowserPerTest with GuiceOneServerPerTest with HtmlUnitFactory
-    with ServerProvider {
+    with ServerProvider with BeforeAndAfterEach {
+  override def afterEach(): Unit = {
+    // prevent prometheus illegal argument / duplicate collector errors
+    CollectorRegistry.defaultRegistry.clear()
+  }
 
   "Application" should {
 
