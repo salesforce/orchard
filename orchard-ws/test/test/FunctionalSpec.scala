@@ -1,6 +1,10 @@
+import io.prometheus.client.CollectorRegistry
+import org.scalatest.BeforeAndAfterEach
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.guice.GuiceOneAppPerSuite
+import play.api.Application
 import play.api.http.Status
+import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 
@@ -8,7 +12,12 @@ import play.api.test.Helpers._
  * Functional tests start a Play application internally, available
  * as `app`.
  */
-class FunctionalSpec extends PlaySpec with GuiceOneAppPerSuite {
+class FunctionalSpec extends PlaySpec with GuiceOneAppPerSuite with BeforeAndAfterEach {
+
+  override def afterEach(): Unit = {
+    // prevent prometheus illegal argument / duplicate collector errors
+    CollectorRegistry.defaultRegistry.clear()
+  }
 
   "Routes" should {
 

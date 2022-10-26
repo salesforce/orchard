@@ -1,5 +1,7 @@
 import akka.actor.ActorSystem
 import controllers.{AsyncController, CountController}
+import io.prometheus.client.CollectorRegistry
+import org.scalatest.BeforeAndAfterEach
 import org.scalatestplus.play._
 import play.api.test.Helpers._
 import play.api.test.FakeRequest
@@ -8,7 +10,12 @@ import services.Counter
 /**
  * Unit tests can run without a full Play application.
  */
-class UnitSpec extends PlaySpec {
+class UnitSpec extends PlaySpec with BeforeAndAfterEach {
+
+  override def afterEach(): Unit = {
+    // prevent prometheus illegal argument / duplicate collector errors
+    CollectorRegistry.defaultRegistry.clear()
+  }
 
   "CountController" should {
 
