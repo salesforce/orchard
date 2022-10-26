@@ -5,6 +5,7 @@ val akkaVersion = "2.6.19"
 val playJsonVersion = "2.9.3"
 val awsVersion = "2.17.+"
 val stubbornVersion = "3.0.5"
+val prometheusVersion = "0.16.0"
 
 val awsEc2            = "software.amazon.awssdk"   % "ec2"                        % awsVersion
 val awsEmr            = "software.amazon.awssdk"   % "emr"                        % awsVersion
@@ -21,9 +22,9 @@ val scalaTestArtifact = "org.scalatest"             %% "scalatest"              
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 val logback           = "ch.qos.logback"             % "logback-classic"          % "1.3.4" % Test
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
-val prometheusClient  = "io.prometheus"              % "simpleclient"             % "0.16.0"
-val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % "0.16.0"
-val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"     % "0.16.0"
+val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
+val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
+val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"     % prometheusVersion
 
 
 lazy val commonSettings = Seq(
