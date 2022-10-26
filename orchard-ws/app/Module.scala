@@ -5,17 +5,14 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import java.time.Clock
-
 import com.google.inject.AbstractModule
-import play.api.libs.concurrent.AkkaGuiceSupport
-
 import com.salesforce.mce.orchard.system.OrchardSystem
-
-import services.{ApplicationTimer, AtomicCounter, Counter}
-import services.{Metric, PrometheusMetric}
+import play.api.libs.concurrent.AkkaGuiceSupport
+import services._
 import tasks.AuthSettingReloadTask
 import utils.{Authorization, AuthorizationSettings}
+
+import java.time.Clock
 
 /**
  * This class is a Guice module that tells Guice how to bind several
