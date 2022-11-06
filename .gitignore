@@ -22,3 +22,7 @@ classes/
 
 # local envs
 .env
+
+# Examples
+example/data/sample_workflow.json
+example/data/sample_workflow_view.json

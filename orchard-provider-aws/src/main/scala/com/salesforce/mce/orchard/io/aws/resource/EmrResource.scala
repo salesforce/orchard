@@ -56,6 +56,8 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                   .instanceCount(instancesConfig.instanceCount)
                   .masterInstanceType(instancesConfig.masterInstanceType)
                   .slaveInstanceType(instancesConfig.slaveInstanceType)
+                  .additionalMasterSecurityGroups(instancesConfig.additionalMasterSecurityGroups: _*)
+                  .additionalSlaveSecurityGroups(instancesConfig.additionalSlaveSecurityGroups: _*)
                   .keepJobFlowAliveWhenNoSteps(true)
                   .build()
               )
@@ -100,8 +102,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       valid => getStatus(valid)
     )
 
-  // private
-  def terminate(spec: EmrResource.InstSpec) = {
+  private def terminate(spec: EmrResource.InstSpec) = {
     Client
       .emr()
       .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
@@ -131,7 +132,9 @@ object EmrResource {
     ec2KeyName: String,
     instanceCount: Int,
     masterInstanceType: String,
-    slaveInstanceType: String
+    slaveInstanceType: String,
+    additionalMasterSecurityGroups: Seq[String],
+    additionalSlaveSecurityGroups: Seq[String]
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
