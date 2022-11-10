@@ -18,7 +18,7 @@ class MetricController @Inject() (
 
   def collect: Action[AnyContent] = Action.async { r: Request[AnyContent] =>
     val metricResults = metric.collect.map(output => Ok(output))
-    metricResults.onComplete(_ => metric.clear())
+    metricResults.onComplete(_ => metric.onCollect())
     metricResults
   }
 
