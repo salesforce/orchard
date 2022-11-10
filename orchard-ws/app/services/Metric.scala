@@ -97,6 +97,6 @@ class PrometheusMetric @Inject() (implicit ec: ExecutionContext) extends Metric 
     writer.toString
   }
 
-  override def onCollect(): Unit = CollectorRegistry.defaultRegistry.clear()
+  override def onCollect(): Unit = {}
 
 }
