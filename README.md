@@ -63,101 +63,23 @@ Orchard allows the definition and execution of **workflows**, where each workflo
 
 Below is an example workflow that defines a number of activities to be executed in an AWS VPC environment:
 
+You can generate a an example workflow with the following command:
+
+```
+cd example/data/data
+mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
+```
+
+You can find more about the command `mustache`
+[here](https://github.com/janl/mustache.js/), and below is an example of
+`sample_workflow_view.json`:
+
 ```json
 {
-    "name": "workflowTestName",
-    "activities": [
-        {
-            "id": "activityId_1",
-            "name": "first_activity",
-            "activityType": "mock.activity.StubActivity",
-            "activitySpec": {
-                "steps": [
-                    {
-                        "jar": "command-runner.jar",
-                        "args": [
-                            "spark-submit",
-                            "s3://s3bucket/submit/spark_submit.py",
-                            "--data_source",
-                            "s3://s3bucket/data/data_source.csv",
-                            "--output_uri",
-                            "s3://s3bucket/data/output"
-                        ]
-                    }
-                ]
-            },
-            "resourceId": "resourceId_1",
-            "maxAttempt": 2
-        },
-        {
-            "id": "activityId_2",
-            "name": "second_activity",
-            "activityType": "mock.activity.StubActivity",
-            "activitySpec": {
-                "steps": [
-                    {
-                        "jar": "command-runner.jar",
-                        "args": [
-                            "step started",
-                            "modeling in progress",
-                            "canceled"
-                        ]
-                    }
-                ]
-            },
-            "resourceId": "resourceId_2",
-            "maxAttempt": 2
-        }
-    ],
-    "resources": [
-        {
-            "id": "resourceId_1",
-            "name": "emr cluster",
-            "resourceType": "mock.resource.StubResource",
-            "resourceSpec": {
-                "releaseLabel": "emr-6.3.0",
-                "applications": [
-                    "Spark"
-                ],
-                "serviceRole": "EMR_Role",
-                "resourceRole": "emr-resource-role",
-                "instancesConfig": {
-                    "subnetId": "subnet-0000ab0a",
-                    "ec2KeyName": "orchard",
-                    "instanceCount": 2,
-                    "masterInstanceType": "m5.xlarge",
-                    "slaveInstanceType": "m5.xlarge"
-                }
-            },
-            "maxAttempt": 2
-        },
-        {
-            "id": "resourceId_2",
-            "name": "emr cluster",
-            "resourceType": "mock.resource.StubResource",
-            "resourceSpec": {
-                "releaseLabel": "emr-6.3.0",
-                "applications": [
-                    "Spark"
-                ],
-                "serviceRole": "EMR_Role",
-                "resourceRole": "emr-resource-role",
-                "instancesConfig": {
-                    "subnetId": "subnet-0000ab0a",
-                    "ec2KeyName": "orchard",
-                    "instanceCount": 2,
-                    "masterInstanceType": "m5.xlarge",
-                    "slaveInstanceType": "m5.xlarge"
-                }
-            },
-            "maxAttempt": 2
-        }
-    ],
-    "dependencies": {
-        "activityId_2": [
-            "activityId_1"
-        ]
-    }
+    "resources": {
+        "subnetId": "subnet-xxxxxxxx"
+    },
+    "s3bucket": "my-bucket-name"
 }
 ```
 

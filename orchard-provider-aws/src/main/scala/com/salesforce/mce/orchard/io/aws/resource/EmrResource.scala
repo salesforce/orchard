@@ -48,19 +48,23 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
               .tags(awsTags: _*)
-              .instances(
-                JobFlowInstancesConfig
+              .instances {
+                val builder = JobFlowInstancesConfig
                   .builder()
                   .ec2SubnetId(instancesConfig.subnetId)
                   .ec2KeyName(instancesConfig.ec2KeyName)
                   .instanceCount(instancesConfig.instanceCount)
                   .masterInstanceType(instancesConfig.masterInstanceType)
                   .slaveInstanceType(instancesConfig.slaveInstanceType)
-                  .additionalMasterSecurityGroups(instancesConfig.additionalMasterSecurityGroups: _*)
-                  .additionalSlaveSecurityGroups(instancesConfig.additionalSlaveSecurityGroups: _*)
                   .keepJobFlowAliveWhenNoSteps(true)
-                  .build()
-              )
+
+                instancesConfig.additionalMasterSecurityGroups
+                  .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
+                instancesConfig.additionalSlaveSecurityGroups
+                  .foldLeft(builder)(_.additionalSlaveSecurityGroups(_: _*))
+
+                builder.build()
+              }
           )((r, uri) => r.logUri(uri))
           .build()
       )
@@ -133,8 +137,8 @@ object EmrResource {
     instanceCount: Int,
     masterInstanceType: String,
     slaveInstanceType: String,
-    additionalMasterSecurityGroups: Seq[String],
-    additionalSlaveSecurityGroups: Seq[String]
+    additionalMasterSecurityGroups: Option[Seq[String]],
+    additionalSlaveSecurityGroups: Option[Seq[String]]
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
