@@ -52,7 +52,7 @@ trait Metric {
 
   def collect: Future[String]
 
-  def clear(): Unit
+  def onCollect(): Unit
 
 }
 
@@ -62,7 +62,7 @@ class PrometheusMetric @Inject() (implicit ec: ExecutionContext) extends Metric 
   DefaultExports.initialize()
   // clear the default registry uppon initialization to make it easier to work with play-plugin
   // auto recompile
-  clear()
+  CollectorRegistry.defaultRegistry.clear()
 
   private val httpStatusCount: Counter = Counter.build
     .name("http_requests_total")
@@ -97,6 +97,6 @@ class PrometheusMetric @Inject() (implicit ec: ExecutionContext) extends Metric 
     writer.toString
   }
 
-  override def clear(): Unit = CollectorRegistry.defaultRegistry.clear()
+  override def onCollect(): Unit = CollectorRegistry.defaultRegistry.clear()
 
 }
