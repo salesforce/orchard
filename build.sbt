@@ -29,8 +29,7 @@ val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"   
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  // scalaVersion := "2.13.10",
-  scalaVersion := "2.13.8",
+  scalaVersion := "2.13.10",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(
