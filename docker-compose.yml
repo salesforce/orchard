@@ -24,7 +24,7 @@ services:
     environment:
       POSTGRES_PASSWORD: "${ORCHARD_PG_SECRET}"
   flyway:
-    image: flyway/flyway:latest-alpine
+    image: flyway/flyway
     volumes:
       - ./flyway/sql:/flyway/sql
     environment:

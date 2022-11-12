@@ -48,8 +48,8 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
               .tags(awsTags: _*)
-              .instances(
-                JobFlowInstancesConfig
+              .instances {
+                val builder = JobFlowInstancesConfig
                   .builder()
                   .ec2SubnetId(instancesConfig.subnetId)
                   .ec2KeyName(instancesConfig.ec2KeyName)
@@ -57,8 +57,14 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                   .masterInstanceType(instancesConfig.masterInstanceType)
                   .slaveInstanceType(instancesConfig.slaveInstanceType)
                   .keepJobFlowAliveWhenNoSteps(true)
-                  .build()
-              )
+
+                instancesConfig.additionalMasterSecurityGroups
+                  .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
+                instancesConfig.additionalSlaveSecurityGroups
+                  .foldLeft(builder)(_.additionalSlaveSecurityGroups(_: _*))
+
+                builder.build()
+              }
           )((r, uri) => r.logUri(uri))
           .build()
       )
@@ -100,8 +106,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       valid => getStatus(valid)
     )
 
-  // private
-  def terminate(spec: EmrResource.InstSpec) = {
+  private def terminate(spec: EmrResource.InstSpec) = {
     Client
       .emr()
       .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
@@ -131,7 +136,9 @@ object EmrResource {
     ec2KeyName: String,
     instanceCount: Int,
     masterInstanceType: String,
-    slaveInstanceType: String
+    slaveInstanceType: String,
+    additionalMasterSecurityGroups: Option[Seq[String]],
+    additionalSlaveSecurityGroups: Option[Seq[String]]
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 

@@ -1,0 +1,73 @@
+{
+    "name": "test workflow",
+    "resources": [
+        {
+            "id": "1",
+            "name": "emr cluster",
+            "resourceType": "aws.resource.EmrResource",
+            "resourceSpec": {
+                "releaseLabel": "emr-6.3.0",
+                "applications": ["Spark"],
+                "serviceRole": "EMR_DefaultRole",
+                "resourceRole": "EMR_EC2_DefaultRole",
+                "instancesConfig": {
+                    "subnetId": "{{resources.subnetId}}",
+                    "ec2KeyName": "orchard",
+                    "instanceCount": 2,
+                    "masterInstanceType": "m5.xlarge",
+                    "slaveInstanceType": "m5.xlarge"
+                }
+            },
+            "maxAttempt": 3
+        }
+    ],
+    "activities": [
+        {
+            "id": "1",
+            "name": "activity 1",
+            "activityType": "aws.activity.EmrActivity",
+            "activitySpec": {
+                "steps": [
+                    {
+                        "jar": "command-runner.jar",
+                        "args": [
+                            "spark-submit",
+                            "s3://{{s3bucket}}/managed/health_violations.py",
+                            "--data_source",
+                            "s3://{{s3bucket}}/data/food_establishment_data.csv",
+                            "--output_uri",
+                            "s3://{{s3bucket}}/data/output"
+                        ]
+                    }
+                ]
+            },
+            "resourceId": "1",
+            "maxAttempt": 3
+        },
+        {
+            "id": "2",
+            "name": "activity 2",
+            "activityType": "aws.activity.EmrActivity",
+            "activitySpec": {
+                "steps": [
+                    {
+                        "jar": "command-runner.jar",
+                        "args": [
+                            "spark-submit",
+                            "s3://{{s3bucket}}/managed/health_violations.py",
+                            "--data_source",
+                            "s3://{{s3bucket}}/data/food_establishment_data.csv",
+                            "--output_uri",
+                            "s3://{{s3bucket}}/data/output"
+                        ]
+                    }
+                ]
+            },
+            "resourceId": "1",
+            "maxAttempt": 3
+        }
+    ],
+    "dependencies": {
+        "2": ["1"]
+    }
+}
