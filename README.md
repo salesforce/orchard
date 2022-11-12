@@ -63,10 +63,10 @@ Orchard allows the definition and execution of **workflows**, where each workflo
 
 Below is an example workflow that defines a number of activities to be executed in an AWS VPC environment:
 
-You can generate a an example workflow with the following command:
+You can generate an example workflow with the following command:
 
 ```
-cd example/data/data
+cd example/data
 mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
 ```
 
