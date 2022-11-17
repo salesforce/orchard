@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
+import scala.jdk.CollectionConverters.MapHasAsJava
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
@@ -48,6 +50,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
               .tags(awsTags: _*)
+              .configurations(EmrResource.parseConfig(spec.sparkConfigs): _*)
               .instances {
                 val builder = JobFlowInstancesConfig
                   .builder()
@@ -142,15 +145,55 @@ object EmrResource {
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
+  case class SparkConfig(
+    classification: String,
+    properties: Option[Map[String, String]],
+    configurations: Option[Seq[SparkConfig]]
+  )
+  implicit val sparkConfigReads: Reads[SparkConfig] = Json.reads[SparkConfig]
+
   case class Spec(
     releaseLabel: String,
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
     tags: Option[Seq[AwsTag]],
-    instancesConfig: InstancesConfig
+    instancesConfig: InstancesConfig,
+    sparkConfigs: Option[Seq[SparkConfig]]
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
+
+  def parseConfig(sparkConfigs: Option[Seq[SparkConfig]]): Seq[Configuration] = {
+    def parseConfig2(sparkConfig: SparkConfig): Configuration = {
+      val builder = Configuration.builder().classification(sparkConfig.classification)
+      for { props <- sparkConfig.properties } yield {
+        builder.properties(props.asJava)
+      }
+      for { moreConfigs <- sparkConfig.configurations } yield {
+        val childConfigs = moreConfigs.map { childConfig =>
+          val childBuilder = Configuration.builder().classification(childConfig.classification)
+          for { childProps <- childConfig.properties } yield {
+            childBuilder.properties(childProps.asJava)
+          }
+          for { grandChild <- childConfig.configurations } yield {
+            childBuilder.configurations(grandChild.map(parseConfig2(_)): _*)
+          }
+          childBuilder.build()
+        }
+        builder.configurations(childConfigs: _*)
+      }
+      builder.build()
+    }
+
+    sparkConfigs match {
+      case None =>
+        logger.debug(s"no spark configs given")
+        List.empty[Configuration]
+      case Some(sparkConfigs) =>
+        logger.debug(s"spec.sparkConfigs=$sparkConfigs")
+        sparkConfigs.map(parseConfig2(_))
+    }
+  }
 
   def decode(conf: ResourceIO.Conf): JsResult[EmrResource] = conf.resourceSpec
     .validate[Spec]
