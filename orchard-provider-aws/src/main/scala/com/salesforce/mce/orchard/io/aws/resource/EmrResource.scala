@@ -35,11 +35,16 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
         logger.debug(s"spec.tags=${spec.tags}")
         ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
     }
+
+    val unwrappedBootstrapActions = spec.bootstrapActions match {
+      case None => Seq.empty
+      case Some(bas) => bas
+    }
     val response = Client
       .emr()
       .runJobFlow(
         loggingUriBase
-          .foldLeft(
+          .foldLeft {
             RunJobFlowRequest
               .builder()
               .name(name)
@@ -47,6 +52,20 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .applications(applications: _*)
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
+              .bootstrapActions(
+                unwrappedBootstrapActions.map { ba =>
+                  BootstrapActionConfig
+                    .builder()
+                    .scriptBootstrapAction(
+                      ScriptBootstrapActionConfig
+                        .builder()
+                        .path(ba.path)
+                        .args(ba.args: _*)
+                        .build()
+                    )
+                    .build()
+                }: _*
+              )
               .tags(awsTags: _*)
               .instances {
                 val builder = JobFlowInstancesConfig
@@ -65,7 +84,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
                 builder.build()
               }
-          )((r, uri) => r.logUri(uri))
+          }((r, uri) => r.logUri(uri))
           .build()
       )
     logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
@@ -142,12 +161,17 @@ object EmrResource {
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
+  case class BootstrapAction(path: String, args: Seq[String])
+  implicit val bootstrapActionReads: Reads[BootstrapAction] =
+    Json.reads[BootstrapAction]
+
   case class Spec(
     releaseLabel: String,
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
     tags: Option[Seq[AwsTag]],
+    bootstrapActions: Option[Seq[BootstrapAction]],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
