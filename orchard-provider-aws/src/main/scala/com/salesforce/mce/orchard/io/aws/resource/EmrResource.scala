@@ -44,7 +44,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       .emr()
       .runJobFlow(
         loggingUriBase
-          .foldLeft {
+          .foldLeft(
             RunJobFlowRequest
               .builder()
               .name(name)
@@ -84,7 +84,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
 
                 builder.build()
               }
-          }((r, uri) => r.logUri(uri))
+          )((r, uri) => r.logUri(uri))
           .build()
       )
     logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
