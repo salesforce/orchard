@@ -35,6 +35,11 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
         logger.debug(s"spec.tags=${spec.tags}")
         ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
     }
+
+    val unwrappedBootstrapActions = spec.bootstrapActions match {
+      case None => Seq.empty
+      case Some(bas) => bas
+    }
     val response = Client
       .emr()
       .runJobFlow(
@@ -47,6 +52,20 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
               .applications(applications: _*)
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
+              .bootstrapActions(
+                unwrappedBootstrapActions.map { ba =>
+                  BootstrapActionConfig
+                    .builder()
+                    .scriptBootstrapAction(
+                      ScriptBootstrapActionConfig
+                        .builder()
+                        .path(ba.path)
+                        .args(ba.args: _*)
+                        .build()
+                    )
+                    .build()
+                }: _*
+              )
               .tags(awsTags: _*)
               .instances {
                 val builder = JobFlowInstancesConfig
@@ -142,12 +161,17 @@ object EmrResource {
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
+  case class BootstrapAction(path: String, args: Seq[String])
+  implicit val bootstrapActionReads: Reads[BootstrapAction] =
+    Json.reads[BootstrapAction]
+
   case class Spec(
     releaseLabel: String,
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
     tags: Option[Seq[AwsTag]],
+    bootstrapActions: Option[Seq[BootstrapAction]],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
