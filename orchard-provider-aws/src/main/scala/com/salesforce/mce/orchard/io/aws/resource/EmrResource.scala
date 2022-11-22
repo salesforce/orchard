@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
+import scala.jdk.CollectionConverters._
+
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
@@ -40,6 +42,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       case None => Seq.empty
       case Some(bas) => bas
     }
+
     val response = Client
       .emr()
       .runJobFlow(
@@ -67,6 +70,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                 }: _*
               )
               .tags(awsTags: _*)
+              .configurations(EmrResource.asConfigurations(spec.configurations): _*)
               .instances {
                 val builder = JobFlowInstancesConfig
                   .builder()
@@ -161,6 +165,34 @@ object EmrResource {
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
+  case class ConfigurationSpec(
+    classification: String,
+    properties: Option[Map[String, String]],
+    configurations: Option[Seq[ConfigurationSpec]]
+  )
+  implicit val configurationSpecReads: Reads[ConfigurationSpec] = Json.reads[ConfigurationSpec]
+
+  def asConfigurations(configurations: Option[Seq[ConfigurationSpec]]): Seq[Configuration] = {
+
+    def parse(configSpec: ConfigurationSpec): Configuration = {
+      val builder = configSpec.properties.foldLeft(
+        Configuration.builder().classification(configSpec.classification)
+      )((b, ps) => b.properties(ps.asJava))
+
+      for { moreConfigs <- configSpec.configurations } {
+        val childConfigs = moreConfigs.map(parse)
+        builder.configurations(childConfigs: _*)
+      }
+
+      builder.build()
+    }
+
+    configurations match {
+      case None => List.empty[Configuration]
+      case Some(conf) => conf.map(parse)
+    }
+  }
+
   case class BootstrapAction(path: String, args: Seq[String])
   implicit val bootstrapActionReads: Reads[BootstrapAction] =
     Json.reads[BootstrapAction]
@@ -172,6 +204,7 @@ object EmrResource {
     resourceRole: String,
     tags: Option[Seq[AwsTag]],
     bootstrapActions: Option[Seq[BootstrapAction]],
+    configurations: Option[Seq[ConfigurationSpec]],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]

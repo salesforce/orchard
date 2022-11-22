@@ -76,10 +76,14 @@ You can find more about the command `mustache`
 
 ```json
 {
-    "resources": {
-        "subnetId": "subnet-xxxxxxxx"
-    },
-    "s3bucket": "my-bucket-name"
+  "resources": {
+    "subnetId": "subnet-xxxxxxxx"
+  },
+  "s3bucket": "my-bucket-name",
+  "sparkConfig": {
+    "env_key": "REGION_ENV_KEY",
+    "env_val": "uswest-cloud-trust"
+  }
 }
 ```
 

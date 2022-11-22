@@ -16,7 +16,33 @@
                     "instanceCount": 2,
                     "masterInstanceType": "m5.xlarge",
                     "slaveInstanceType": "m5.xlarge"
-                }
+                },
+                "sparkConfigs": [
+                    {
+                        "classification": "spark",
+                        "properties": {
+                            "maximizeResourceAllocation": "true"
+                        }
+                    },
+                    {
+                        "classification": "spark-defaults",
+                        "properties": {
+                            "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                            "spark.dynamicAllocation.enabled": "false"
+                        }
+                    },
+                    {
+                        "classification": "spark-env",
+                        "configurations": [
+                          {
+                            "classification": "export",
+                            "properties": {
+                              "{{sparkConfig.env_key}}": "{{sparkConfig.env_val}}"
+                            }
+                          }
+                        ]
+                    }
+                ]
             },
             "maxAttempt": 3
         }
