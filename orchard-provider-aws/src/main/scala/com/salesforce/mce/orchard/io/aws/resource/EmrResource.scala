@@ -7,7 +7,7 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
-import scala.jdk.CollectionConverters.MapHasAsJava
+import scala.jdk.CollectionConverters._
 
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
