@@ -13,7 +13,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 import akka.actor.typed.ActorRef
 import play.api.Logging
-import play.api.libs.json.JsError
+import play.api.libs.json.{JsError, JsNull, JsString}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.WorkflowQuery
@@ -74,10 +74,10 @@ class WorkflowController @Inject() (
               Future.successful(BadRequest(errorJson))
             },
             workflowReq => {
-              processWorkflowRequest(workflowReq).map(workflowId => Ok(workflowId))
+              processWorkflowRequest(workflowReq).map(workflowId => Ok(JsString(workflowId)))
             }
           )
-      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized)
+      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
     }
   }
 
@@ -88,12 +88,12 @@ class WorkflowController @Inject() (
           .async(new WorkflowQuery(id).activate())
           .map {
             case 0 =>
-              NotFound("does not exists")
+              NotFound(JsString("does not exists"))
             case _ =>
               orchardSystem ! OrchardSystem.ActivateMsg(db.orchardDB, id)
-              Ok(id)
+              Ok(JsString(id))
           }
-      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized)
+      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
     }
   }
 
