@@ -36,3 +36,51 @@ class WorkflowQuery(workflowId: String) {
     self.map(r => (r.status, r.terminatedAt)).update((status, Option(LocalDateTime.now())))
 
 }
+
+object WorkflowQuery {
+
+  sealed trait OrderBy
+  object OrderBy {
+    case object CreatedAt extends OrderBy
+    case object ActivatedAt extends OrderBy
+    case object TerminatedAt extends OrderBy
+  }
+
+  sealed trait Order
+  object Order {
+    case object Asc extends Order
+    case object Desc extends Order
+  }
+
+  def filter(
+    like: String,
+    orderBy: OrderBy,
+    order: Order,
+    limit: Int,
+    offset: Int
+  ): DBIO[Seq[WorkflowTable.R]] = {
+
+    val sortByColumn = (orderBy, order) match {
+      case (OrderBy.CreatedAt, Order.Desc) =>
+        t: WorkflowTable => t.createdAt.desc
+      case (OrderBy.CreatedAt, Order.Asc) =>
+        t: WorkflowTable => t.createdAt.asc
+      case (OrderBy.ActivatedAt, Order.Desc) =>
+        t: WorkflowTable => t.activatedAt.desc
+      case (OrderBy.ActivatedAt, Order.Asc) =>
+        t: WorkflowTable => t.activatedAt.asc
+      case (OrderBy.TerminatedAt, Order.Desc) =>
+        t: WorkflowTable => t.terminatedAt.desc
+      case (OrderBy.TerminatedAt, Order.Asc) =>
+        t: WorkflowTable => t.terminatedAt.asc
+    }
+
+    WorkflowTable()
+      .filter(_.name.like(like))
+      .sortBy(sortByColumn)
+      .drop(offset)
+      .take(limit)
+      .result
+  }
+
+}

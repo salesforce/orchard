@@ -13,14 +13,14 @@ import scala.concurrent.{ExecutionContext, Future}
 
 import akka.actor.typed.ActorRef
 import play.api.Logging
-import play.api.libs.json.{JsError, JsNull, JsString}
+import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
-import com.salesforce.mce.orchard.db.WorkflowQuery
+import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
 import com.salesforce.mce.orchard.model.{Activity, Resource, Workflow}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
-import models.WorkflowRequest
+import models.{WorkflowRequest, WorkflowResponse}
 import services.DatabaseService
 import utils.{AuthTransformAction, InvalidApiRequest, ValidApiRequest}
 
@@ -95,6 +95,70 @@ class WorkflowController @Inject() (
           }
       case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
     }
+  }
+
+  private def toResponse(r: WorkflowTable.R): JsValue = Json.toJson(
+    WorkflowResponse(
+      r.id,
+      r.name,
+      r.status.toString,
+      r.createdAt,
+      r.activatedAt,
+      r.terminatedAt
+    )
+  )
+
+  def filter(
+    like: String,
+    orderBy: Option[String],
+    order: Option[String],
+    page: Option[Int],
+    perPage: Option[Int]
+  ) = authAction.async {
+    case ValidApiRequest(apiRole, req) =>
+      val validated = for {
+        vOrderBy <- WorkflowController.validateOrderBy(orderBy)
+        vOrder <- WorkflowController.validateOrder(order)
+        vPage <- WorkflowController.validateOne(page.getOrElse(1), "page")
+        limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
+      } yield (vOrderBy, vOrder, limit, (vPage - 1) * limit)
+
+      validated match {
+        case Right((by, ord, limit, offset)) =>
+          db.orchardDB
+            .async(WorkflowQuery.filter(like, by, ord, limit, offset))
+            .map(rs => Ok(Json.toJson(rs.map(toResponse))))
+        case Left(msg) =>
+          Future.successful(BadRequest(JsString(msg)))
+      }
+    case InvalidApiRequest(_) =>
+      Future.successful(Results.Unauthorized(JsNull))
+  }
+
+}
+
+object WorkflowController {
+
+  private def validateOrderBy(orderBy: Option[String]): Either[String, WorkflowQuery.OrderBy] = {
+    orderBy.fold[Either[String, WorkflowQuery.OrderBy]](Right(WorkflowQuery.OrderBy.CreatedAt)) {
+      case "created_at" => Right(WorkflowQuery.OrderBy.CreatedAt)
+      case "activated_at" => Right(WorkflowQuery.OrderBy.ActivatedAt)
+      case "terminated_at" => Right(WorkflowQuery.OrderBy.TerminatedAt)
+      case other => Left(s"Unknown order_by $other")
+    }
+  }
+
+  private def validateOrder(order: Option[String]): Either[String, WorkflowQuery.Order] = {
+    order.fold[Either[String, WorkflowQuery.Order]](Right(WorkflowQuery.Order.Desc)) {
+      case "desc" => Right(WorkflowQuery.Order.Desc)
+      case "asc" => Right(WorkflowQuery.Order.Asc)
+      case other => Left(s"Unknown order $other")
+    }
+  }
+
+  private def validateOne(num: Int, name: String): Either[String, Int] = {
+    if (num < 1) Left(s"$name must be at least 1")
+    else Right(num)
   }
 
 }

@@ -16,5 +16,7 @@ POST    /v1/workflow                controllers.WorkflowController.post()
 
 PUT     /v1/workflow/:id            controllers.WorkflowController.activate(id: String)
 
+->      /v1/workflows               routers.WorkflowsRouter
+
 GET     /__status                   controllers.StatusController.status()
 GET     /__metrics                  controllers.MetricController.collect()
