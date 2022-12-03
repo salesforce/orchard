@@ -141,7 +141,7 @@ class WorkflowController @Inject() (
         .async(new WorkflowQuery(workflowId).deletePending())
         .map { r =>
           if (r >= 1) Ok(Json.toJson(r))
-          else NotFound(Json.toJson(s"Pending workflow ${workflowId}} does not exist"))
+          else NotFound(Json.toJson(s"Pending workflow ${workflowId} does not exist"))
         }
     case InvalidApiRequest(_) =>
       Future.successful(Results.Unauthorized(JsNull))
