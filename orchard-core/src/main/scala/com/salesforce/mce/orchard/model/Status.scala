@@ -35,6 +35,8 @@ object Status extends Enumeration {
 
   final val Timeout = Value("timeout")
 
+  final val Deleted = Value("deleted")
+
   val PrerunStatuses = Set(Pending)
 
   val TransitionToRunningStatuses = Set(Activating)

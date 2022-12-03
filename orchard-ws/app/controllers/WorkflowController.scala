@@ -135,6 +135,18 @@ class WorkflowController @Inject() (
       Future.successful(Results.Unauthorized(JsNull))
   }
 
+  def delete(workflowId: String) = authAction.async {
+    case ValidApiRequest(apiRole, req) =>
+      db.orchardDB
+        .async(new WorkflowQuery(workflowId).deletePending())
+        .map { r =>
+          if (r >= 1) Ok(Json.toJson(r))
+          else NotFound(Json.toJson(s"Pending workflow ${workflowId}} does not exist"))
+        }
+    case InvalidApiRequest(_) =>
+      Future.successful(Results.Unauthorized(JsNull))
+  }
+
 }
 
 object WorkflowController {

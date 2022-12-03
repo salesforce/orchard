@@ -13,7 +13,7 @@ import java.time.LocalDateTime
 
 class WorkflowQuery(workflowId: String) {
 
-  private def self = WorkflowTable().filter(_.id === workflowId)
+  private def self = WorkflowTable().filter(r => r.id === workflowId && r.status =!= Status.Deleted)
 
   def get(): DBIO[Option[WorkflowTable.R]] = self.result.headOption
 
@@ -32,8 +32,14 @@ class WorkflowQuery(workflowId: String) {
     .filter(_.workflowId === workflowId)
     .result
 
-  def setTerminated(status: Status.Value): DBIO[Int] =
-    self.map(r => (r.status, r.terminatedAt)).update((status, Option(LocalDateTime.now())))
+  def setTerminated(status: Status.Value): DBIO[Int] = self
+    .map(r => (r.status, r.terminatedAt))
+    .update((status, Option(LocalDateTime.now())))
+
+  def deletePending(): DBIO[Int] = self
+    .filter(_.status === Status.Pending)
+    .map(r => (r.status, r.terminatedAt))
+    .update((Status.Pending, Option(LocalDateTime.now())))
 
 }
 
@@ -76,7 +82,7 @@ object WorkflowQuery {
     }
 
     WorkflowTable()
-      .filter(_.name.like(like))
+      .filter(r => r.name.like(like) && r.status =!= Status.Deleted)
       .sortBy(sortByColumn)
       .drop(offset)
       .take(limit)
