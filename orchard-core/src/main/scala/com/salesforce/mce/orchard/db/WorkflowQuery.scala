@@ -39,7 +39,7 @@ class WorkflowQuery(workflowId: String) {
   def deletePending(): DBIO[Int] = self
     .filter(_.status === Status.Pending)
     .map(r => (r.status, r.terminatedAt))
-    .update((Status.Pending, Option(LocalDateTime.now())))
+    .update((Status.Deleted, Option(LocalDateTime.now())))
 
 }
 
