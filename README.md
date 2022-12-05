@@ -79,6 +79,11 @@ npm bin mustache
 ```
 and add the binary path (for example `~/node_modules/.bin`) to your local PATH.
 
+Or simply install `mustache` globally if you don't need to add it to the PATH.
+```
+npm install -g mustache
+```
+
 Below is an example of
 `sample_workflow_view.json`:
 
