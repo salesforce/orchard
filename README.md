@@ -71,7 +71,20 @@ mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workfl
 ```
 
 You can find more about the command `mustache`
-[here](https://github.com/janl/mustache.js/), and below is an example of
+[here](https://github.com/janl/mustache.js/). 
+
+If `mustache` command is not found after install, run 
+```
+npm bin mustache
+```
+and add the binary path (for example `~/node_modules/.bin`) to your local PATH.
+
+Or simply install `mustache` globally if you don't need to add it to the PATH.
+```
+npm install -g mustache
+```
+
+Below is an example of
 `sample_workflow_view.json`:
 
 ```json
@@ -89,13 +102,13 @@ You can find more about the command `mustache`
 
 To submit this request to Orchard:
 ```html
-POST http://localhost:9000/v1/workflow
+POST http://localhost:9001/v1/workflow
 ```
 Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
 
 Once defined, activate a workflow using the workflow id like so:
 ```html
-PUT http://localhost:9000/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
+PUT http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
 ```
 
 **Resource and Activity Types**
