@@ -44,7 +44,11 @@ object WorkflowMgr {
     val activities = database.sync(query.activities())
     val dependencies = database.sync(query.dependencies())
 
-    val graph = dependencies.foldLeft(new AdjacencyList[String]()) { (g, d) =>
+    val initialVertices = activities.foldLeft(new AdjacencyList[String]()) { (g, v) =>
+      g.addVertex(v.activityId)
+    }
+
+    val graph = dependencies.foldLeft(initialVertices) { (g, d) =>
       g.addEdge(d.activityId, d.dependentId)
     }
 
