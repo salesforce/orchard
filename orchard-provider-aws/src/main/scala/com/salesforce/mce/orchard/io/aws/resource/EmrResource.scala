@@ -78,12 +78,13 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                 val builder = JobFlowInstancesConfig
                   .builder()
                   .ec2SubnetId(instancesConfig.subnetId)
-                  .ec2KeyName(instancesConfig.ec2KeyName)
                   .instanceCount(instancesConfig.instanceCount)
                   .masterInstanceType(instancesConfig.masterInstanceType)
                   .slaveInstanceType(instancesConfig.slaveInstanceType)
                   .keepJobFlowAliveWhenNoSteps(true)
 
+                instancesConfig.ec2KeyName
+                  .foldLeft(builder)(_.ec2KeyName(_))
                 instancesConfig.additionalMasterSecurityGroups
                   .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
@@ -159,7 +160,7 @@ object EmrResource {
 
   case class InstancesConfig(
     subnetId: String,
-    ec2KeyName: String,
+    ec2KeyName: Option[String],
     instanceCount: Int,
     masterInstanceType: String,
     slaveInstanceType: String,
