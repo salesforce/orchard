@@ -7,14 +7,16 @@
 
 package com.salesforce.mce.orchard.io.aws.resource
 
+import java.util.UUID
+
 import scala.jdk.CollectionConverters._
 
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
 
-import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.io.ResourceIO
+import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.RetryHelper._
@@ -59,6 +61,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                 unwrappedBootstrapActions.map { ba =>
                   BootstrapActionConfig
                     .builder()
+                    .name(s"bootstrap-action.${UUID.randomUUID()}")
                     .scriptBootstrapAction(
                       ScriptBootstrapActionConfig
                         .builder()
