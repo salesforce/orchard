@@ -7,30 +7,34 @@
 
 package com.salesforce.mce.orchard.system
 
-import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, Behavior}
+
 import com.salesforce.mce.orchard.db.OrchardDatabase
 import com.salesforce.mce.orchard.system.actor.WorkflowMgr
 
 object OrchardSystem {
 
   sealed trait Msg
-  case class ActivateMsg(database: OrchardDatabase, workflowId: String) extends Msg
+  case class ActivateMsg(workflowId: String) extends Msg
 
-  def apply(): Behavior[Msg] =
-    Behaviors.setup(context => new OrchardSystem(context))
+  def apply(database: OrchardDatabase): Behavior[Msg] = Behaviors.setup { ctx =>
+    apply(ctx, database, Map.empty[String, ActorRef[WorkflowMgr.Msg]])
+  }
 
-}
-
-class OrchardSystem(context: ActorContext[OrchardSystem.Msg]) extends AbstractBehavior(context) {
-
-  import OrchardSystem._
-
-  override def onMessage(msg: Msg): Behavior[Msg] = msg match {
-    case ActivateMsg(database, workflowId) =>
-      context.log.info(s"activating... $workflowId")
-      context.spawn(WorkflowMgr.apply(database, workflowId), s"$workflowId")
-      this
+  private def apply(
+    ctx: ActorContext[Msg],
+    database: OrchardDatabase,
+    workflows: Map[String, ActorRef[WorkflowMgr.Msg]]
+  ): Behavior[Msg] = Behaviors.receiveMessage { case ActivateMsg(workflowId) =>
+    ctx.log.info(s"${ctx.self} Received ActivateMsg($workflowId)")
+    if (workflows.contains(workflowId)) {
+      ctx.log.warn(s"${ctx.self} workflow $workflowId is already active")
+      Behaviors.same
+    } else {
+      val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId), workflowId)
+      apply(ctx, database, workflows + (workflowId -> workflowMgr))
+    }
   }
 
 }

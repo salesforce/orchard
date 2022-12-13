@@ -11,7 +11,6 @@ import javax.inject._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-import akka.actor.typed.ActorRef
 import play.api.Logging
 import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
@@ -21,7 +20,7 @@ import com.salesforce.mce.orchard.model.{Activity, Resource, Workflow}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 import models.{WorkflowRequest, WorkflowResponse}
-import services.DatabaseService
+import services.{DatabaseService, OrchardSystemService}
 import utils.{AuthTransformAction, InvalidApiRequest, ValidApiRequest}
 
 @Singleton
@@ -29,7 +28,7 @@ class WorkflowController @Inject() (
   cc: ControllerComponents,
   db: DatabaseService,
   authAction: AuthTransformAction,
-  orchardSystem: ActorRef[OrchardSystem.Msg]
+  orchardSystemService: OrchardSystemService
 )(implicit ec: ExecutionContext)
     extends AbstractController(cc) with Logging {
 
@@ -90,7 +89,7 @@ class WorkflowController @Inject() (
             case 0 =>
               NotFound(JsString("does not exists"))
             case _ =>
-              orchardSystem ! OrchardSystem.ActivateMsg(db.orchardDB, id)
+              orchardSystemService.orchard ! OrchardSystem.ActivateMsg(id)
               Ok(JsString(id))
           }
       case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))

@@ -5,14 +5,14 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+import java.time.Clock
+
 import com.google.inject.AbstractModule
-import com.salesforce.mce.orchard.system.OrchardSystem
 import play.api.libs.concurrent.AkkaGuiceSupport
+
 import services._
 import tasks.AuthSettingReloadTask
 import utils.{Authorization, AuthorizationSettings}
-
-import java.time.Clock
 
 /**
  * This class is a Guice module that tells Guice how to bind several
@@ -40,7 +40,8 @@ class Module extends AbstractModule with AkkaGuiceSupport {
     // Activate metrics
     bind(classOf[Metric]).to(classOf[PrometheusMetric])
 
-    bindTypedActor(OrchardSystem.apply(), "orchard-system")
+    // Startup the orchard system root actor
+    bind(classOf[OrchardSystemService]).asEagerSingleton()
   }
 
 }
