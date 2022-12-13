@@ -73,7 +73,7 @@ case class ShellScriptActivity(
         .parameters(paraMap.asJava)
         .timeoutSeconds(deliveryTimeout)
         .outputS3BucketName(outputS3BucketName)
-        .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripPrefix("/")}/${name}_$ts")
+        .outputS3KeyPrefix(s"${outputS3KeyPrefix.stripSuffix("/")}/${name}_$ts")
         .build()
     val response = client.sendCommand(request)
     client.close()
