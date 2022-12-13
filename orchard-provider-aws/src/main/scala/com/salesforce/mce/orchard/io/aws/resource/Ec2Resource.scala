@@ -36,6 +36,10 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
       .iamInstanceProfile(
         IamInstanceProfileSpecification.builder().name(spec.instanceProfile).build()
       )
+
+    spec.securityGroups
+      .foldLeft(builder)(_.securityGroupIds(_: _*))
+
     if (spec.spotInstance) {
       logger.debug(s"create: spotInstance=true")
       builder.instanceMarketOptions(
@@ -167,6 +171,7 @@ object Ec2Resource {
     subnetId: String,
     instanceType: String,
     instanceProfile: String,
+    securityGroups: Option[Seq[String]],
     tags: Option[Seq[AwsTag]],
     spotInstance: Boolean
   )
