@@ -20,6 +20,7 @@ object WorkflowMgr {
 
   case class ActivityCompleted(activityId: String, status: Status.Value) extends Msg
   case class ResourceTerminated(resourceId: String, status: Status.Value) extends Msg
+  case object CancelWorkflow extends Msg
 
   case class Params(
     ctx: ActorContext[Msg],
@@ -86,7 +87,11 @@ object WorkflowMgr {
 
     case ActivityCompleted(activityId, actStatus) =>
       ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
-      val nextStatus = if (actStatus != Status.Finished) Status.Failed else ps.status
+      val nextStatus = actStatus match {
+        case Status.Canceled => Status.Canceled
+        case Status.Finished => Status.Finished
+        case _ => Status.Failed
+      }
 
       val newGraph = ps.activityGraph.removeVertex(activityId)
       val activityMgrs = ps.activityMgrs - activityId
@@ -125,6 +130,11 @@ object WorkflowMgr {
 
       if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
       else active(ctx, database, newState)
+
+    case CancelWorkflow =>
+      ctx.log.info(s"${ctx.self} (active) received CancelWorkflow")
+      ps.activityMgrs.values.foreach(_ ! ActivityMgr.Cancel)
+      Behaviors.same
 
   } receiveSignal { case (c, PostStop) =>
     c.log.info(s"${c.self} stopped")

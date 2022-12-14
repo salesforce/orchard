@@ -146,6 +146,18 @@ class WorkflowController @Inject() (
       Future.successful(Results.Unauthorized(JsNull))
   }
 
+  def cancel(workflowId: String) = authAction.async {
+    case ValidApiRequest(apiRole, req) =>
+      db.orchardDB
+        .async(new WorkflowQuery(workflowId).setCanceling())
+        .map { r =>
+          if (r >= 1) Ok(Json.toJson(r))
+          else NotFound(Json.toJson(s"Running workflow ${workflowId} does not exist"))
+        }
+    case InvalidApiRequest(_) =>
+      Future.successful(Results.Unauthorized(JsNull))
+  }
+
 }
 
 object WorkflowController {

@@ -36,6 +36,11 @@ class WorkflowQuery(workflowId: String) {
     .map(r => (r.status, r.terminatedAt))
     .update((status, Option(LocalDateTime.now())))
 
+  def setCanceling(): DBIO[Int] = WorkflowTable()
+    .filter(r => r.id === workflowId && r.status === Status.Running)
+    .map(_.status)
+    .update(Status.Canceling)
+
   def deletePending(): DBIO[Int] = self
     .filter(_.status === Status.Pending)
     .map(r => (r.status, r.terminatedAt))
@@ -88,5 +93,8 @@ object WorkflowQuery {
       .take(limit)
       .result
   }
+
+  def filterByStatus(status: Status.Value): DBIO[Seq[WorkflowTable.R]] =
+    WorkflowTable().filter(r => r.status === status).result
 
 }
