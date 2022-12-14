@@ -55,7 +55,7 @@ object OrchardSystem {
       apply(ctx, database, timers, workflows - workflowId)
 
     case ScanCanceling =>
-      ctx.log.info(s"${ctx.self} Received ScanCencling")
+      ctx.log.info(s"${ctx.self} Received ScanCanceling")
       val cancelings = database.sync(WorkflowQuery.filterByStatus(Status.Canceling))
       for {
         workflow <- cancelings
