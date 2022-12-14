@@ -160,10 +160,10 @@ object EmrResource {
 
   case class InstancesConfig(
     subnetId: String,
-    ec2KeyName: Option[String],
     instanceCount: Int,
     masterInstanceType: String,
     slaveInstanceType: String,
+    ec2KeyName: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
     additionalSlaveSecurityGroups: Option[Seq[String]]
   )
