@@ -53,9 +53,7 @@ object ActivityAttempt {
 
       val attemptR = database
         .sync(query.get())
-        .getOrElse(
-          database.sync(query.create()(ExecutionContext.global))
-        )
+        .getOrElse(database.sync(query.create()(ExecutionContext.global)))
 
       val rscInstSpecAdapter =
         ctx.messageAdapter[ResourceMgr.ResourceInstSpecRsp](r => ResourceInstSpec(r.spec))
@@ -81,6 +79,7 @@ object ActivityAttempt {
           terminate(ps, sts)
       }
     }
+
   }
 
   def waiting(

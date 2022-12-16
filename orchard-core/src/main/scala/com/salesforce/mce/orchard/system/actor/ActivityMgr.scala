@@ -66,8 +66,13 @@ object ActivityMgr {
   }
 
   private def init(ps: Params, status: Status.Value): Behavior[Msg] = status match {
+
+    // this is the state if everything follows the happy path
     case Status.Pending =>
       idle(ps)
+
+    // activity started by some other actor, but for some reason, it no longer supervises the
+    // activity
     case Status.Running =>
       val attmptOpt = ps.database
         .sync(ps.activityQuery.attempts())
@@ -77,6 +82,7 @@ object ActivityMgr {
       val attmptEith = attmptOpt match {
         case Some(r) =>
           if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) Right(r.attempt + 1)
+          else if (Status.isAlive(r.status)) Right(r.attempt)  // resume an already live attempt
           else Left(r.status)
         case None =>
           Right(1)

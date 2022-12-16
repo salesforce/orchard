@@ -7,35 +7,52 @@
 
 package com.salesforce.mce.orchard.system
 
+import java.net.InetAddress
+import java.util.UUID
+
 import scala.concurrent.duration._
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed.{ActorRef, Behavior}
 
-import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowQuery}
+import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowManagerQuery, WorkflowQuery}
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.actor.WorkflowMgr
-import akka.actor.typed.scaladsl.TimerScheduler
 
 object OrchardSystem {
 
   val CancelingScanDelay = 10.seconds
+  val HeartBeatDelay = 10.seconds
+  val CheckAdoptionDelay = 10.seconds
 
   sealed trait Msg
   case class ActivateMsg(workflowId: String) extends Msg
   private case object ScanCanceling extends Msg
   private case class WorkflowTerminated(workflowId: String) extends Msg
+  private case object HeartBeat extends Msg
+  private case object AdoptOrphanWorkflows extends Msg
 
   def apply(database: OrchardDatabase): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       timers.startSingleTimer(ScanCanceling, CancelingScanDelay)
-      apply(ctx, database, timers, Map.empty[String, ActorRef[WorkflowMgr.Msg]])
+      timers.startSingleTimer(HeartBeat, HeartBeatDelay)
+      timers.startSingleTimer(AdoptOrphanWorkflows, CheckAdoptionDelay)
+      val managerId =
+        s"os-${InetAddress.getLocalHost().getHostName()}-${UUID.randomUUID()}".take(64)
+      apply(
+        ctx,
+        database,
+        new WorkflowManagerQuery(managerId),
+        timers,
+        Map.empty[String, ActorRef[WorkflowMgr.Msg]]
+      )
     }
   }
 
   private def apply(
     ctx: ActorContext[Msg],
     database: OrchardDatabase,
+    query: WorkflowManagerQuery,
     timers: TimerScheduler[Msg],
     workflows: Map[String, ActorRef[WorkflowMgr.Msg]]
   ): Behavior[Msg] = Behaviors.receiveMessage[Msg] {
@@ -45,14 +62,15 @@ object OrchardSystem {
         ctx.log.warn(s"${ctx.self} workflow $workflowId is already active")
         Behaviors.same
       } else {
+        database.sync(query.manage(workflowId))
         val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId), workflowId)
         ctx.watchWith(workflowMgr, WorkflowTerminated(workflowId))
-        apply(ctx, database, timers, workflows + (workflowId -> workflowMgr))
+        apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr))
       }
 
     case WorkflowTerminated(workflowId) =>
       ctx.log.info(s"${ctx.self} Received WorkflowTerminated($workflowId)")
-      apply(ctx, database, timers, workflows - workflowId)
+      apply(ctx, database, query, timers, workflows - workflowId)
 
     case ScanCanceling =>
       ctx.log.info(s"${ctx.self} Received ScanCanceling")
@@ -63,6 +81,24 @@ object OrchardSystem {
       } workflowMgr ! WorkflowMgr.CancelWorkflow
       timers.startSingleTimer(ScanCanceling, CancelingScanDelay)
       Behaviors.same
+
+    case HeartBeat =>
+      ctx.log.info(s"${ctx.self} Received HeartBeat")
+      database.sync(query.checkin(workflows.keySet))
+      timers.startSingleTimer(HeartBeat, HeartBeatDelay)
+      Behaviors.same
+
+    case AdoptOrphanWorkflows =>
+      ctx.log.info(s"${ctx.self} Received AdoptOrphanWorkflows")
+      database
+        .sync(query.getOrhpanWorkflows(1.minutes, 1.day))
+        .foreach { wf =>
+          ctx.log.info(s"${ctx.self} Adopt workflow ${wf.id}")
+          ctx.self ! ActivateMsg(wf.id)
+        }
+      timers.startSingleTimer(AdoptOrphanWorkflows, CheckAdoptionDelay)
+      Behaviors.same
+
   }
 
 }
