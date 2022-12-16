@@ -28,6 +28,7 @@ class WorkflowManagerQuery(managerId: String) {
     val currentTime = LocalDateTime.now()
     val cutoff = currentTime.minus(lookback.toJava)
     val latestCheckinBefore = currentTime.minus(orphenDuration.toJava)
+
     WorkflowTable()
       .join(WorkflowManagerTable())
       .on((wf, wm) => wf.id === wm.workflowId)
@@ -41,5 +42,7 @@ class WorkflowManagerQuery(managerId: String) {
       .map { case (wf, _) => wf }
       .result
   }
+
+  def delete(workflowId: String) = WorkflowManagerTable().filter(r => r.workflowId === workflowId && r.)
 
 }

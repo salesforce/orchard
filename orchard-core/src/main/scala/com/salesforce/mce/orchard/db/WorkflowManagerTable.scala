@@ -6,7 +6,7 @@ import java.time.LocalDateTime
 class WorkflowManagerTable(tag: Tag)
     extends Table[WorkflowManagerTable.R](tag, "workflow_managers") {
 
-  def workflowId = column[String]("workflow_id", O.SqlType("VARCHAR(64)"))
+  def workflowId = column[String]("workflow_id", O.SqlType("VARCHAR(64)"), O.PrimaryKey)
 
   def managerId = column[String]("manager_id", O.SqlType("VARCHAR(64)"))
 
@@ -18,8 +18,6 @@ class WorkflowManagerTable(tag: Tag)
       onUpdate = ForeignKeyAction.Restrict,
       onDelete = ForeignKeyAction.Cascade
     )
-
-  def pk = primaryKey("pk_workflow_managers", (workflowId, managerId))
 
   override def * = (workflowId, managerId, lastCheckin).mapTo[WorkflowManagerTable.R]
 
