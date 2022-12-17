@@ -63,7 +63,10 @@ object OrchardSystem {
         ctx.log.warn(s"${ctx.self} workflow $workflowId is already active")
         Behaviors.same
       } else {
-        database.sync(query.manage(workflowId))
+        if (database.sync(query.get(workflowId)).isEmpty)
+          database.sync(query.manage(workflowId))
+        else
+          database.sync(query.checkin(Set(workflowId)))
         val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId), workflowId)
         ctx.watchWith(workflowMgr, WorkflowTerminated(workflowId))
         apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr))
@@ -95,7 +98,10 @@ object OrchardSystem {
         .sync(query.getOrhpanWorkflows(1.minutes, 1.day))
         .flatMap {
           case (wf, Some(wm)) =>
-            if (database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
+            val del = database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId))
+            println("!!!!")
+            println(del)
+            if (del > 0 &&
               database.sync(query.manage(wf.id)) > 0) {
 
               Some(wf.id)

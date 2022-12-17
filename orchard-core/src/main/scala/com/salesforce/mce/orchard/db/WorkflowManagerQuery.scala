@@ -11,6 +11,13 @@ import com.salesforce.mce.orchard.model.Status
 
 class WorkflowManagerQuery(managerId: String) {
 
+  def get(workflowId: String) =
+    WorkflowManagerTable()
+      .filter(r => r.managerId === managerId && r.workflowId === workflowId)
+      .take(1)
+      .result
+      .headOption
+
   def manage(workflowId: String) =
     WorkflowManagerTable() += WorkflowManagerTable.R(
       workflowId,
