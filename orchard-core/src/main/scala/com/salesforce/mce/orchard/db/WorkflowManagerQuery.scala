@@ -30,19 +30,21 @@ class WorkflowManagerQuery(managerId: String) {
     val latestCheckinBefore = currentTime.minus(orphenDuration.toJava)
 
     WorkflowTable()
-      .join(WorkflowManagerTable())
+      .joinLeft(WorkflowManagerTable())
       .on((wf, wm) => wf.id === wm.workflowId)
-      .filter { case (wf, wm) =>
+      .filter { case (wf, wmOpt) =>
         !wf.status.inSet(Status.TerminatedStatuses) &&
         wf.status =!= Status.Pending &&
         wf.status =!= Status.Deleted &&
-        wm.lastCheckin >= cutoff &&
-        wm.lastCheckin < latestCheckinBefore
+        (wmOpt.isEmpty ||
+          (wmOpt.map(_.lastCheckin) >= cutoff &&
+            wmOpt.map(_.lastCheckin) < latestCheckinBefore))
       }
-      .map { case (wf, _) => wf }
       .result
   }
 
-  def delete(workflowId: String) = WorkflowManagerTable().filter(r => r.workflowId === workflowId && r.)
+  def delete(workflowId: String) = WorkflowManagerTable()
+    .filter(r => r.workflowId === workflowId && r.managerId === managerId)
+    .delete
 
 }

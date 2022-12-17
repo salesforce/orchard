@@ -56,6 +56,7 @@ object OrchardSystem {
     timers: TimerScheduler[Msg],
     workflows: Map[String, ActorRef[WorkflowMgr.Msg]]
   ): Behavior[Msg] = Behaviors.receiveMessage[Msg] {
+
     case ActivateMsg(workflowId) =>
       ctx.log.info(s"${ctx.self} Received ActivateMsg($workflowId)")
       if (workflows.contains(workflowId)) {
@@ -92,10 +93,27 @@ object OrchardSystem {
       ctx.log.info(s"${ctx.self} Received AdoptOrphanWorkflows")
       database
         .sync(query.getOrhpanWorkflows(1.minutes, 1.day))
-        .foreach { wf =>
-          ctx.log.info(s"${ctx.self} Adopt workflow ${wf.id}")
-          ctx.self ! ActivateMsg(wf.id)
+        .flatMap {
+          case (wf, Some(wm)) =>
+            if (database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
+              database.sync(query.manage(wf.id)) > 0) {
+
+              Some(wf.id)
+            } else {
+              None
+            }
+          case (wf, None) =>
+            if (database.sync(query.manage(wf.id)) > 0) {
+              Some(wf.id)
+            } else {
+              None
+            }
         }
+        .foreach { wfId =>
+          ctx.log.info(s"${ctx.self} Adopt workflow ${wfId}")
+          ctx.self ! ActivateMsg(wfId)
+        }
+
       timers.startSingleTimer(AdoptOrphanWorkflows, CheckAdoptionDelay)
       Behaviors.same
 
