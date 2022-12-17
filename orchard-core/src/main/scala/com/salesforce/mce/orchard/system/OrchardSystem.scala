@@ -98,10 +98,7 @@ object OrchardSystem {
         .sync(query.getOrhpanWorkflows(1.minutes, 1.day))
         .flatMap {
           case (wf, Some(wm)) =>
-            val del = database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId))
-            println("!!!!")
-            println(del)
-            if (del > 0 &&
+            if (database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
               database.sync(query.manage(wf.id)) > 0) {
 
               Some(wf.id)
