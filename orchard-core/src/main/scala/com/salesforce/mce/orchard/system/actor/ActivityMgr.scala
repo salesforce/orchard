@@ -63,7 +63,7 @@ object ActivityMgr {
     database
       .sync(activityQuery.get())
       .map{ r =>
-        params.ctx.log.info(s"Activity Manager ${params.activityId} init with Status ${r.status}")
+        params.ctx.log.info(s"${ctx.self} init with status ${r.status}")
         init(params, r.status)
       }
       .getOrElse(terminate(params, Status.Failed))
@@ -87,10 +87,8 @@ object ActivityMgr {
       val attmptEith = attmptOpt match {
         case Some(r) =>
           if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) {
-            println("There is NO live attempt")
             Right(r.attempt + 1)
           } else if (Status.isAlive(r.status)) {
-            println("There is already live attempt")
             Right(r.attempt)  // resume an already live attempt
           }
           else Left(r.status)

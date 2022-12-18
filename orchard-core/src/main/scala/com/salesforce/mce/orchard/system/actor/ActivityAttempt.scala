@@ -81,6 +81,7 @@ object ActivityAttempt {
         case Status.Pending | Status.Activating =>
           if (attemptR.status == Status.Pending) database.sync(query.setWaiting())
           resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
+          ctx.log.info(s"${ctx.self} became waiting")
           waiting(ps, resourceMgr, activityType, activitySpec)
         case Status.Running =>
           val resourceInstInfo = for {
@@ -115,6 +116,10 @@ object ActivityAttempt {
                   terminate(ps, Status.Failed)
                 },
                 activityIO => {
+                  ctx.log.info(s"${ctx.self} became running")
+                  // TODO become running always need to schedule the timer, need to make this a
+                  // method instead
+                  ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
                   running(
                     ps,
                     resourceInst.instanceAttempt,
