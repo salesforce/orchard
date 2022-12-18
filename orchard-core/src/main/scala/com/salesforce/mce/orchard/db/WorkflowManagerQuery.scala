@@ -31,10 +31,10 @@ class WorkflowManagerQuery(managerId: String) {
       .map(_.lastCheckin)
       .update(LocalDateTime.now())
 
-  def getOrhpanWorkflows(orphenDuration: FiniteDuration, lookback: FiniteDuration) = {
+  def getOrhpanWorkflows(orphanDuration: FiniteDuration, lookback: FiniteDuration) = {
     val currentTime = LocalDateTime.now()
     val cutoff = currentTime.minus(lookback.toJava)
-    val latestCheckinBefore = currentTime.minus(orphenDuration.toJava)
+    val latestCheckinBefore = currentTime.minus(orphanDuration.toJava)
 
     WorkflowTable()
       .joinLeft(WorkflowManagerTable())
