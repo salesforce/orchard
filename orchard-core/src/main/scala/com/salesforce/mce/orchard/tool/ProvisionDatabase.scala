@@ -25,23 +25,23 @@ object ProvisionDatabase extends App {
     ActivityAttemptTable().schema ++
     WorkflowManagerTable().schema
 
-  //  val db = OrchardDatabase()
+   val db = OrchardDatabase()
 
-  // checkFirstTimeProvision(db)
+  checkFirstTimeProvision(db)
 
-  // println("executing the following statements...")
-  // schema.dropIfExistsStatements.foreach(println)
-  // Await.result(
-  //   db.connection.run(DBIO.seq(schema.dropIfExists)),
-  //   2.minutes
-  // )
+  println("executing the following statements...")
+  schema.dropIfExistsStatements.foreach(println)
+  Await.result(
+    db.connection.run(DBIO.seq(schema.dropIfExists)),
+    2.minutes
+  )
 
   println("executing the following statements...")
   schema.createStatements.foreach(println)
-  // Await.result(
-  //   db.connection.run(DBIO.seq(schema.createIfNotExists)),
-  //   2.minutes
-  // )
+  Await.result(
+    db.connection.run(DBIO.seq(schema.createIfNotExists)),
+    2.minutes
+  )
 
   /**
    * corner case for 1st time creation of schema, when the drop would give
