@@ -11,6 +11,7 @@ import java.time.LocalDateTime
 
 import scala.concurrent.ExecutionContext
 
+import play.api.libs.json.JsValue
 import slick.jdbc.PostgresProfile.api._
 
 import com.salesforce.mce.orchard.model.Status
@@ -28,9 +29,17 @@ class ActivityAttemptQuery(workflowId: String, activityId: String, attempt: Int)
     .map(r => r.status)
     .update(Status.Activating)
 
-  def setRunning(): DBIO[Int] = self
-    .map(r => (r.status, r.activatedAt))
-    .update((Status.Running, Option(LocalDateTime.now())))
+  def setRunning(resourceId: String, resourceInstance: Int, attemptSpec: JsValue): DBIO[Int] = self
+    .map(r => (r.status, r.resourceId, r.resourceInstanceAttempt, r.attemptSpec, r.activatedAt))
+    .update(
+      (
+        Status.Running,
+        Option(resourceId),
+        Option(resourceInstance),
+        Option(attemptSpec),
+        Option(LocalDateTime.now())
+      )
+    )
 
   def setTerminated(sts: Status.Value, errorMessage: String) = self
     .map(r => (r.status, r.errorMessage, r.terminatedAt))

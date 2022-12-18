@@ -21,7 +21,7 @@ object ResourceMgr {
   sealed trait Msg
 
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
-  case class ResourceInstSpecRsp(spec: Either[Status.Value, JsValue])
+  case class ResourceInstSpecRsp(spec: Either[Status.Value, (Int, JsValue)])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
   case class InactiveResourceInstance(
     instanceId: Int,
@@ -78,7 +78,9 @@ object ResourceMgr {
               !Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt
             ) {
               Right(lastInst.instanceAttempt + 1)
-            } else {
+            } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running) {
+              Right(lastInst.instanceAttempt)
+            }else {
               Left(lastInst.status)
             }
           case None =>

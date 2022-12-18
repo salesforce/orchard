@@ -32,6 +32,7 @@ object ActivityMgr {
     activityType: String,
     activitySpec: JsValue,
     maxAttempt: Int,
+    resourceId: String,
     resourceMgr: ActorRef[ResourceMgr.Msg]
   )
 
@@ -55,19 +56,28 @@ object ActivityMgr {
       activityR.activtyType,
       activityR.activitySpec,
       activityR.maxAttempt,
+      activityR.resourceId,
       resourceMgr
     )
 
     database
       .sync(activityQuery.get())
-      .map(r => init(params, r.status))
+      .map{ r =>
+        params.ctx.log.info(s"${ctx.self} init with status ${r.status}")
+        init(params, r.status)
+      }
       .getOrElse(terminate(params, Status.Failed))
 
   }
 
   private def init(ps: Params, status: Status.Value): Behavior[Msg] = status match {
+
+    // this is the state if everything follows the happy path
     case Status.Pending =>
       idle(ps)
+
+    // activity started by some other actor, but for some reason, it no longer supervises the
+    // activity
     case Status.Running =>
       val attmptOpt = ps.database
         .sync(ps.activityQuery.attempts())
@@ -76,7 +86,11 @@ object ActivityMgr {
 
       val attmptEith = attmptOpt match {
         case Some(r) =>
-          if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) Right(r.attempt + 1)
+          if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) {
+            Right(r.attempt + 1)
+          } else if (Status.isAlive(r.status)) {
+            Right(r.attempt)  // resume an already live attempt
+          }
           else Left(r.status)
         case None =>
           Right(1)
@@ -97,7 +111,8 @@ object ActivityMgr {
               ps.activityId,
               attmptId,
               ps.activityType,
-              ps.activitySpec
+              ps.activitySpec,
+              ps.resourceId
             ),
             s"attempt-${attmptId}"
           )
@@ -128,7 +143,8 @@ object ActivityMgr {
           ps.activityId,
           attmptId,
           ps.activityType,
-          ps.activitySpec
+          ps.activitySpec,
+          ps.resourceId
         ),
         s"attempt-${attmptId}"
       )
@@ -183,7 +199,8 @@ object ActivityMgr {
             ps.activityId,
             newAttmptId,
             ps.activityType,
-            ps.activitySpec
+            ps.activitySpec,
+            ps.resourceId
           ),
           s"attempt-${newAttmptId}"
         )

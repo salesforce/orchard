@@ -40,9 +40,9 @@ class ResourceInstanceQuery(workflowId: String, resourceId: String, instanceId: 
     (ResourceInstanceTable() += record).map(_ => record)
   }
 
-  def setActivated(): DBIO[Int] = self
-    .map(r => (r.status, r.activatedAt))
-    .update((Status.Activating, Option(LocalDateTime.now())))
+  def setActivated(instSpec: JsValue): DBIO[Int] = self
+    .map(r => (r.status, r.instanceSpec, r.activatedAt))
+    .update((Status.Activating, Option(instSpec), Option(LocalDateTime.now())))
 
   def setRunning(): DBIO[Int] = self
     .map(r => r.status)

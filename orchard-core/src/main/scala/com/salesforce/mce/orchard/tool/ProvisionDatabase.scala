@@ -22,7 +22,8 @@ object ProvisionDatabase extends App {
     ResourceInstanceTable().schema ++
     ActivityTable().schema ++
     DependencyTable().schema ++
-    ActivityAttemptTable().schema
+    ActivityAttemptTable().schema ++
+    WorkflowManagerTable().schema
 
   val db = OrchardDatabase()
 
@@ -36,7 +37,7 @@ object ProvisionDatabase extends App {
   )
 
   println("executing the following statements...")
-  schema.createIfNotExistsStatements.foreach(println)
+  schema.createStatements.foreach(println)
   Await.result(
     db.connection.run(DBIO.seq(schema.createIfNotExists)),
     2.minutes
@@ -90,6 +91,5 @@ object ProvisionDatabase extends App {
         println(s"Provision table $tableName re-run...")
     }
   }
-
 
 }

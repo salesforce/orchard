@@ -18,6 +18,7 @@ import com.salesforce.mce.orchard.db.{ActivityAttemptQuery, OrchardDatabase}
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
+import com.salesforce.mce.orchard.db.ResourceInstanceQuery
 
 object ActivityAttempt {
 
@@ -25,7 +26,7 @@ object ActivityAttempt {
 
   sealed trait Msg
   case object Cancel extends Msg
-  case class ResourceInstSpec(spec: Either[Status.Value, JsValue]) extends Msg
+  case class ResourceInstSpec(spec: Either[Status.Value, (Int, JsValue)]) extends Msg
   private case object CheckProgress extends Msg
 
   case class Params(
@@ -33,6 +34,10 @@ object ActivityAttempt {
     activityMgr: ActorRef[ActivityMgr.Msg],
     database: OrchardDatabase,
     query: ActivityAttemptQuery,
+    workflowId: String,
+    activityId: String,
+    attemptId: Int,
+    resourceId: String,
     rscInstSpecAdapter: ActorRef[ResourceMgr.ResourceInstSpecRsp],
     timers: TimerScheduler[Msg]
   )
@@ -45,7 +50,8 @@ object ActivityAttempt {
     activityId: String,
     attemptId: Int,
     activityType: String,
-    activitySpec: JsValue
+    activitySpec: JsValue,
+    resourceId: String
   ): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       ctx.log.info(s"Starting ActivityAttempt ${ctx.self}...")
@@ -53,9 +59,7 @@ object ActivityAttempt {
 
       val attemptR = database
         .sync(query.get())
-        .getOrElse(
-          database.sync(query.create()(ExecutionContext.global))
-        )
+        .getOrElse(database.sync(query.create()(ExecutionContext.global)))
 
       val rscInstSpecAdapter =
         ctx.messageAdapter[ResourceMgr.ResourceInstSpecRsp](r => ResourceInstSpec(r.spec))
@@ -65,30 +69,77 @@ object ActivityAttempt {
         activityMgr,
         database,
         query,
+        workflowId,
+        activityId,
+        attemptId,
+        resourceId,
         rscInstSpecAdapter,
         timers
       )
 
       attemptR.status match {
-        case Status.Pending =>
-          database.sync(query.setWaiting())
+        case Status.Pending | Status.Activating =>
+          if (attemptR.status == Status.Pending) database.sync(query.setWaiting())
           resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
-          waiting(ps, resourceMgr, workflowId, activityId, attemptId, activityType, activitySpec)
-        case Status.Activating | Status.Running =>
-          resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
-          waiting(ps, resourceMgr, workflowId, activityId, attemptId, activityType, activitySpec)
+          ctx.log.info(s"${ctx.self} became waiting")
+          waiting(ps, resourceMgr, activityType, activitySpec)
+        case Status.Running =>
+          val resourceInstInfo = for {
+            resourceInstAttempt <- attemptR.resourceInstanceAttempt
+            resourceInst <- database
+              .sync(
+                new ResourceInstanceQuery(
+                  workflowId,
+                  resourceId,
+                  resourceInstAttempt
+                ).get()
+              )
+            instSpec <- resourceInst.instanceSpec
+          } yield (resourceInst, instSpec)
+
+          resourceInstInfo match {
+            case Some((resourceInst, instSpec)) =>
+              ActivityIO(
+                ActivityIO.Conf(
+                  workflowId,
+                  activityId,
+                  attemptId,
+                  activityType,
+                  activitySpec,
+                  instSpec
+                )
+              ).fold(
+                invalid => {
+                  ctx.log.error(
+                    s"${ctx.self} invalid activityIO: ${InvalidJsonException.raise(invalid)}"
+                  )
+                  terminate(ps, Status.Failed)
+                },
+                activityIO => {
+                  ctx.log.info(s"${ctx.self} became running")
+                  running(
+                    ps,
+                    resourceInst.instanceAttempt,
+                    activityIO,
+                    attemptR.attemptSpec.get
+                  )
+                }
+              )
+            case None =>
+              ctx.log.error(s"${ctx.self} Running activity attemt missing resource instance info")
+              terminate(ps, Status.Failed)
+          }
+
         case sts =>
           terminate(ps, sts)
       }
     }
+
   }
 
   def waiting(
     ps: Params,
     resourceMgr: ActorRef[ResourceMgr.Msg],
-    workflowId: String,
-    activityId: String,
-    attemptId: Int,
     activityType: String,
     activitySpec: JsValue
   ): Behavior[Msg] =
@@ -102,13 +153,13 @@ object ActivityAttempt {
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received ResourceInstSpec($specEither)")
         specEither match {
           // resource is up, with valid instance spec, start the activity
-          case Right(spec) =>
+          case Right((resourceInst, spec)) =>
             val result = for {
               activityIO <- ActivityIO(
                 ActivityIO.Conf(
-                  workflowId,
-                  activityId,
-                  attemptId,
+                  ps.workflowId,
+                  ps.activityId,
+                  ps.attemptId,
                   activityType,
                   activitySpec,
                   spec
@@ -124,9 +175,8 @@ object ActivityAttempt {
                 ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
                 terminate(ps, Status.Failed)
               case Right((activityIO, attemptSpec)) =>
-                ps.database.sync(ps.query.setRunning())
-                ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
-                running(ps, activityIO, attemptSpec)
+                ps.database.sync(ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec))
+                running(ps, resourceInst, activityIO, attemptSpec)
             }
 
           // Resource not ready yet
@@ -147,7 +197,13 @@ object ActivityAttempt {
         Behaviors.same
     }
 
-  def running(ps: Params, activityIO: ActivityIO, attemptSpec: JsValue): Behavior[Msg] =
+  def running(
+    ps: Params,
+    resourceInstance: Int,
+    activityIO: ActivityIO,
+    attemptSpec: JsValue
+  ): Behavior[Msg] = {
+    ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
     Behaviors.receiveMessage {
       case Cancel =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
@@ -176,6 +232,7 @@ object ActivityAttempt {
             Behaviors.same
         }
     }
+  }
 
   def terminate(ps: Params, status: Status.Value): Behavior[Msg] = {
     ps.ctx.log.info(s"Stopping ActivityAttempt ${ps.ctx.self} actor...")
