@@ -23,7 +23,7 @@ object OrchardSystem {
 
   val CancelingScanDelay = 10.seconds
   val HeartBeatDelay = 10.seconds
-  val CheckAdoptionDelay = 10.seconds
+  val CheckAdoptionDelay = 1.minute
 
   sealed trait Msg
   case class ActivateMsg(workflowId: String) extends Msg
@@ -77,7 +77,7 @@ object OrchardSystem {
       apply(ctx, database, query, timers, workflows - workflowId)
 
     case ScanCanceling =>
-      ctx.log.info(s"${ctx.self} Received ScanCanceling")
+      ctx.debug.info(s"${ctx.self} Received ScanCanceling")
       val cancelings = database.sync(WorkflowQuery.filterByStatus(Status.Canceling))
       for {
         workflow <- cancelings
@@ -87,15 +87,15 @@ object OrchardSystem {
       Behaviors.same
 
     case HeartBeat =>
-      ctx.log.info(s"${ctx.self} Received HeartBeat")
+      ctx.debug.info(s"${ctx.self} Received HeartBeat")
       database.sync(query.checkin(workflows.keySet))
       timers.startSingleTimer(HeartBeat, HeartBeatDelay)
       Behaviors.same
 
     case AdoptOrphanWorkflows =>
-      ctx.log.info(s"${ctx.self} Received AdoptOrphanWorkflows")
+      ctx.debug.info(s"${ctx.self} Received AdoptOrphanWorkflows")
       database
-        .sync(query.getOrhpanWorkflows(1.minutes, 1.day))
+        .sync(query.getOrhpanWorkflows(5.minutes, 1.day))
         .flatMap {
           case (wf, Some(wm)) =>
             if (database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
