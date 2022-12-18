@@ -25,7 +25,7 @@ object ProvisionDatabase extends App {
     ActivityAttemptTable().schema ++
     WorkflowManagerTable().schema
 
-   val db = OrchardDatabase()
+  val db = OrchardDatabase()
 
   checkFirstTimeProvision(db)
 
@@ -91,6 +91,5 @@ object ProvisionDatabase extends App {
         println(s"Provision table $tableName re-run...")
     }
   }
-
 
 }
