@@ -32,6 +32,7 @@ object ActivityMgr {
     activityType: String,
     activitySpec: JsValue,
     maxAttempt: Int,
+    resourceId: String,
     resourceMgr: ActorRef[ResourceMgr.Msg]
   )
 
@@ -55,12 +56,16 @@ object ActivityMgr {
       activityR.activtyType,
       activityR.activitySpec,
       activityR.maxAttempt,
+      activityR.resourceId,
       resourceMgr
     )
 
     database
       .sync(activityQuery.get())
-      .map(r => init(params, r.status))
+      .map{ r =>
+        params.ctx.log.info(s"Activity Manager ${params.activityId} init with Status ${r.status}")
+        init(params, r.status)
+      }
       .getOrElse(terminate(params, Status.Failed))
 
   }
@@ -81,8 +86,13 @@ object ActivityMgr {
 
       val attmptEith = attmptOpt match {
         case Some(r) =>
-          if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) Right(r.attempt + 1)
-          else if (Status.isAlive(r.status)) Right(r.attempt)  // resume an already live attempt
+          if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) {
+            println("There is NO live attempt")
+            Right(r.attempt + 1)
+          } else if (Status.isAlive(r.status)) {
+            println("There is already live attempt")
+            Right(r.attempt)  // resume an already live attempt
+          }
           else Left(r.status)
         case None =>
           Right(1)
@@ -103,7 +113,8 @@ object ActivityMgr {
               ps.activityId,
               attmptId,
               ps.activityType,
-              ps.activitySpec
+              ps.activitySpec,
+              ps.resourceId
             ),
             s"attempt-${attmptId}"
           )
@@ -134,7 +145,8 @@ object ActivityMgr {
           ps.activityId,
           attmptId,
           ps.activityType,
-          ps.activitySpec
+          ps.activitySpec,
+          ps.resourceId
         ),
         s"attempt-${attmptId}"
       )
@@ -189,7 +201,8 @@ object ActivityMgr {
             ps.activityId,
             newAttmptId,
             ps.activityType,
-            ps.activitySpec
+            ps.activitySpec,
+            ps.resourceId
           ),
           s"attempt-${newAttmptId}"
         )

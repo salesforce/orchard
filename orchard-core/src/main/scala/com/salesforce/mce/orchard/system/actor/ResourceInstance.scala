@@ -79,10 +79,9 @@ object ResourceInstance {
   private def pending(ps: Params): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (pending) received GetResourceInstSpec($replyTo)")
-      ps.database.sync(ps.query.setActivated())
       ps.resourceIO.create() match {
         case Right(instSpec) =>
-          ps.database.sync(ps.query.setSpec(instSpec))
+          ps.database.sync(ps.query.setActivated(instSpec))
           ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
           activating(ps, instSpec)
         case Left(exp) =>
@@ -96,6 +95,7 @@ object ResourceInstance {
       terminate(ps, status, None)
   }
 
+  // activating status is the status where resource instance is up but awating for ready status
   private def activating(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (activating) received GetResourceInstSpec($replyTo)")
@@ -107,7 +107,7 @@ object ResourceInstance {
         case Right(Status.Running) =>
           ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource status Running")
           ps.database.sync(ps.query.setRunning())
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(instSpec))
+          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
           running(ps, instSpec)
         case Right(sts) =>
           ps.ctx.log.info(
@@ -128,7 +128,7 @@ object ResourceInstance {
       ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec(${replyTo})")
       ps.resourceIO.getStatus(instSpec) match {
         case Right(Status.Running) =>
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(instSpec))
+          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
           Behaviors.same
         case sts =>
           ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")

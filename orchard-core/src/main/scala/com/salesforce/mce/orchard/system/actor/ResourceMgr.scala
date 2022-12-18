@@ -21,7 +21,7 @@ object ResourceMgr {
   sealed trait Msg
 
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
-  case class ResourceInstSpecRsp(spec: Either[Status.Value, JsValue])
+  case class ResourceInstSpecRsp(spec: Either[Status.Value, (Int, JsValue)])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
   case class InactiveResourceInstance(
     instanceId: Int,
