@@ -77,7 +77,7 @@ object OrchardSystem {
       apply(ctx, database, query, timers, workflows - workflowId)
 
     case ScanCanceling =>
-      ctx.debug.info(s"${ctx.self} Received ScanCanceling")
+      ctx.log.debug(s"${ctx.self} Received ScanCanceling")
       val cancelings = database.sync(WorkflowQuery.filterByStatus(Status.Canceling))
       for {
         workflow <- cancelings
@@ -87,13 +87,13 @@ object OrchardSystem {
       Behaviors.same
 
     case HeartBeat =>
-      ctx.debug.info(s"${ctx.self} Received HeartBeat")
+      ctx.log.debug(s"${ctx.self} Received HeartBeat")
       database.sync(query.checkin(workflows.keySet))
       timers.startSingleTimer(HeartBeat, HeartBeatDelay)
       Behaviors.same
 
     case AdoptOrphanWorkflows =>
-      ctx.debug.info(s"${ctx.self} Received AdoptOrphanWorkflows")
+      ctx.log.debug(s"${ctx.self} Received AdoptOrphanWorkflows")
       database
         .sync(query.getOrhpanWorkflows(5.minutes, 1.day))
         .flatMap {
