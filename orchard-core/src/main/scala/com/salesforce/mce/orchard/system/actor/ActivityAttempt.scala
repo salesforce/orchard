@@ -117,9 +117,6 @@ object ActivityAttempt {
                 },
                 activityIO => {
                   ctx.log.info(s"${ctx.self} became running")
-                  // TODO become running always need to schedule the timer, need to make this a
-                  // method instead
-                  ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
                   running(
                     ps,
                     resourceInst.instanceAttempt,
@@ -178,10 +175,7 @@ object ActivityAttempt {
                 ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
                 terminate(ps, Status.Failed)
               case Right((activityIO, attemptSpec)) =>
-                ps.database.sync(
-                  ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec)
-                )
-                ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
+                ps.database.sync(ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec))
                 running(ps, resourceInst, activityIO, attemptSpec)
             }
 
@@ -208,7 +202,8 @@ object ActivityAttempt {
     resourceInstance: Int,
     activityIO: ActivityIO,
     attemptSpec: JsValue
-  ): Behavior[Msg] =
+  ): Behavior[Msg] = {
+    ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
     Behaviors.receiveMessage {
       case Cancel =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
@@ -237,6 +232,7 @@ object ActivityAttempt {
             Behaviors.same
         }
     }
+  }
 
   def terminate(ps: Params, status: Status.Value): Behavior[Msg] = {
     ps.ctx.log.info(s"Stopping ActivityAttempt ${ps.ctx.self} actor...")
