@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import scala.jdk.DurationConverters._
+
 import scala.concurrent.duration._
 
 import akka.actor.typed._
@@ -16,6 +18,8 @@ import play.api.libs.json.JsValue
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceInstanceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
+import java.time.LocalDateTime
+import java.time.{Duration => JDuration}
 
 object ResourceInstance {
 
@@ -41,7 +45,8 @@ object ResourceInstance {
     workflowId: String,
     resourceId: String,
     instanceId: Int,
-    resourceIO: ResourceIO
+    resourceIO: ResourceIO,
+    terminateAfter: Duration
   ): Behavior[Msg] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
       context.log.info(s"Starting ResourceInstance ${context.self}...")
@@ -60,6 +65,8 @@ object ResourceInstance {
         instanceId,
         timers
       )
+
+      val actualTerminatedAfter = terminateAfter - JDuration.between(instR.createdAt, LocalDateTime.now()).toScala
 
       (instR.status, instR.instanceSpec) match {
         case (Status.Pending, _) =>

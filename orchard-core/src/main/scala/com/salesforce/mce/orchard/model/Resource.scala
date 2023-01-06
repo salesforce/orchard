@@ -14,5 +14,6 @@ case class Resource(
   name: String,
   resourceType: String,
   resourceSpec: JsValue,
-  maxInstanceCount: Int
+  maxInstanceCount: Int,
+  terminateAfter: Double
 )

@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import scala.concurrent.duration._
+
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
@@ -40,7 +42,8 @@ object ResourceMgr {
     resourceId: String,
     maxAttempt: Int,
     rscType: String,
-    rscSpec: JsValue
+    rscSpec: JsValue,
+    terminateAfter: Duration
   )
 
   def apply(
@@ -62,7 +65,8 @@ object ResourceMgr {
       resourceId,
       resourceR.maxAttempt,
       resourceR.resourceType,
-      resourceR.resourceSpec
+      resourceR.resourceSpec,
+      resourceR.terminateAfter * 1.hour
     )
 
     resourceR.status match {
@@ -270,7 +274,8 @@ object ResourceMgr {
             ps.workflowId,
             ps.resourceId,
             instId,
-            resourceIO
+            resourceIO,
+            ps.terminateAfter
           ),
           s"inst-$instId"
         )

@@ -24,7 +24,8 @@ object WorkflowRequest {
     name: String,
     resourceType: String,
     resourceSpec: JsValue,
-    maxAttempt: Int
+    maxAttempt: Int,
+    terminateAfter: Option[Double]
   )
 
   case class Activity(

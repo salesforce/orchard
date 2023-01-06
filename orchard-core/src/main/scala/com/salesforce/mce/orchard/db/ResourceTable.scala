@@ -36,6 +36,9 @@ class ResourceTable(tag: Tag) extends Table[ResourceTable.R](tag, "resources") {
 
   def terminatedAt = column[Option[LocalDateTime]]("terminated_at")
 
+  // number of hours
+  def terminateAfter = column[Double]("terminate_after")
+
   def pk = primaryKey("pk_resources", (workflowId, resourceId))
 
   def workflow = foreignKey("fk_resources_workflows", workflowId, TableQuery[WorkflowTable])(
@@ -54,7 +57,8 @@ class ResourceTable(tag: Tag) extends Table[ResourceTable.R](tag, "resources") {
     status,
     createdAt,
     activatedAt,
-    terminatedAt
+    terminatedAt,
+    terminateAfter
   ).mapTo[ResourceTable.R]
 
 }
@@ -73,7 +77,8 @@ object ResourceTable {
     status: Status.Value,
     createdAt: LocalDateTime,
     activatedAt: Option[LocalDateTime],
-    terminatedAt: Option[LocalDateTime]
+    terminatedAt: Option[LocalDateTime],
+    terminateAfter: Double
   )
 
 }

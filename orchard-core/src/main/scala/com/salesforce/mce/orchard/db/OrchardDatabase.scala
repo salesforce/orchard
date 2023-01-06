@@ -50,7 +50,8 @@ class OrchardDatabase(conf: Config) {
         initialStatus,
         currentTime,
         None,
-        None
+        None,
+        r.terminateAfter
       )
     }
 
