@@ -7,7 +7,10 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import java.time.{Duration => JDuration, LocalDateTime}
+
 import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
@@ -41,7 +44,8 @@ object ResourceInstance {
     workflowId: String,
     resourceId: String,
     instanceId: Int,
-    resourceIO: ResourceIO
+    resourceIO: ResourceIO,
+    terminateAfter: FiniteDuration
   ): Behavior[Msg] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
       context.log.info(s"Starting ResourceInstance ${context.self}...")
@@ -60,6 +64,15 @@ object ResourceInstance {
         instanceId,
         timers
       )
+
+      val estimatedTerminatedAfter =
+        terminateAfter - JDuration.between(instR.createdAt, LocalDateTime.now()).toScala
+
+      val terminateAfterTimer = if (estimatedTerminatedAfter < 5.minutes) {
+        5.minutes
+      } else estimatedTerminatedAfter
+
+      timers.startSingleTimer(Shutdown(Status.Timeout), terminateAfterTimer)
 
       (instR.status, instR.instanceSpec) match {
         case (Status.Pending, _) =>
@@ -120,7 +133,7 @@ object ResourceInstance {
       }
     case Shutdown(status) =>
       ps.ctx.log.info(s"${ps.ctx.self} (activating) received Shutdown($status)")
-      shuttingDown(ps, instSpec, Status.Failed, None)
+      shuttingDown(ps, instSpec, if (status == Status.Timeout) status else Status.Failed, None)
   }
 
   private def running(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {

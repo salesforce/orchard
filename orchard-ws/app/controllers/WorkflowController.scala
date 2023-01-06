@@ -54,7 +54,8 @@ class WorkflowController @Inject() (
             r.name,
             r.resourceType,
             r.resourceSpec,
-            r.maxAttempt
+            r.maxAttempt,
+            r.terminateAfter.getOrElse(8)
           )
         },
         request.dependencies

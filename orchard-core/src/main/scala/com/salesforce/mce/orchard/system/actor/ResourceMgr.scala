@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import scala.concurrent.duration._
+
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
@@ -40,7 +42,8 @@ object ResourceMgr {
     resourceId: String,
     maxAttempt: Int,
     rscType: String,
-    rscSpec: JsValue
+    rscSpec: JsValue,
+    terminateAfter: FiniteDuration
   )
 
   def apply(
@@ -53,6 +56,14 @@ object ResourceMgr {
 
     val resourceQuery = new ResourceQuery(workflowId, resourceId)
     val resourceR = database.sync(resourceQuery.get()).get
+
+    // here we make all invalid input to default 8 hours, the input should do validation before
+    // saving them to DB
+    val terminateAfterDuration: FiniteDuration = try {
+      (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
+    } catch {
+      case e: Exception => 8.hour
+    }
     val ps = Params(
       ctx,
       database,
@@ -62,7 +73,8 @@ object ResourceMgr {
       resourceId,
       resourceR.maxAttempt,
       resourceR.resourceType,
-      resourceR.resourceSpec
+      resourceR.resourceSpec,
+      terminateAfterDuration
     )
 
     resourceR.status match {
@@ -153,7 +165,11 @@ object ResourceMgr {
       ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
       resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
       Behaviors.same
-    // resource should not receive finished status during "running" state.
+    case ResourceInstanceFinished(Status.Timeout) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
+      ps.database.sync(ps.resourceQuery.setTerminated(Status.Timeout))
+      finished(ps, Status.Timeout)
+    // resource should not receive finished status during "running" state other than Timeout
     case ResourceInstanceFinished(status) =>
       ps.ctx.log.error(
         s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished($status, None)"
@@ -193,8 +209,9 @@ object ResourceMgr {
       terminating(ps.ctx, ps, status)
   }
 
-  // finished status is when resource instance creation failed, we set resource manager in a state
-  // that it can still handle incoming calls, but won't create new instance anymore
+  // finished status is when resource instance creation failed and cannot or should not be retried,
+  // we set resource manager in a state that it can still handle incoming calls, but won't create
+  // new instance anymore
   def finished(
     ps: Params,
     status: Status.Value
@@ -270,7 +287,8 @@ object ResourceMgr {
             ps.workflowId,
             ps.resourceId,
             instId,
-            resourceIO
+            resourceIO,
+            ps.terminateAfter
           ),
           s"inst-$instId"
         )
