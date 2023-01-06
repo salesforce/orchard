@@ -7,9 +7,10 @@
 
 package com.salesforce.mce.orchard.system.actor
 
-import scala.jdk.DurationConverters._
+import java.time.{Duration => JDuration, LocalDateTime}
 
 import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
@@ -18,8 +19,6 @@ import play.api.libs.json.JsValue
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceInstanceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
-import java.time.LocalDateTime
-import java.time.{Duration => JDuration}
 
 object ResourceInstance {
 
