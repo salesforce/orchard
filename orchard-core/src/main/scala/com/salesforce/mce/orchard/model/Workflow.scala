@@ -11,5 +11,6 @@ case class Workflow(
   name: String,
   activities: Seq[Activity],
   resources: Seq[Resource],
-  dependencies: Map[String, Seq[String]]
+  dependencies: Map[String, Seq[String]],
+  actions: Seq[Action]
 )

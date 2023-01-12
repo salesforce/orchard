@@ -16,9 +16,9 @@ import com.salesforce.mce.orchard.model.Status
 
 class ActivityTable(tag: Tag) extends Table[ActivityTable.R](tag, "activities") {
 
-  def workflowId = column[String]("workflow_id", O.SqlType("VARCHAR(64)"))
+  def workflowId = column[String]("workflow_id", O.SqlType(WorkflowTable.IdSqlType))
 
-  def activityId = column[String]("activity_id", O.SqlType("VARCHAR(64)"))
+  def activityId = column[String]("activity_id", O.SqlType(ActivityTable.IdSqlType))
 
   def name = column[String]("name", O.SqlType("VARCHAR(256)"))
 
@@ -70,6 +70,8 @@ class ActivityTable(tag: Tag) extends Table[ActivityTable.R](tag, "activities") 
 }
 
 object ActivityTable {
+
+  final val IdSqlType = "VARCHAR(64)"
 
   def apply() = TableQuery[ActivityTable]
 
