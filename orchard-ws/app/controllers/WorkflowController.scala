@@ -16,7 +16,7 @@ import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
-import com.salesforce.mce.orchard.model.{Activity, Resource, Workflow}
+import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Workflow}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 import models.{WorkflowRequest, WorkflowResponse}
@@ -45,7 +45,9 @@ class WorkflowController @Inject() (
             a.activityType,
             a.activitySpec,
             a.resourceId,
-            a.maxAttempt
+            a.maxAttempt,
+            a.onSuccess.getOrElse(Seq.empty),
+            a.onFailure.getOrElse(Seq.empty)
           )
         },
         request.resources.map { r =>
@@ -58,7 +60,15 @@ class WorkflowController @Inject() (
             r.terminateAfter.getOrElse(8)
           )
         },
-        request.dependencies
+        request.dependencies,
+        request.actions.map { r =>
+          WfAction(
+            r.id,
+            r.name,
+            r.actionType,
+            r.actionSpec
+          )
+        }
       )
     )
   }

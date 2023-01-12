@@ -11,10 +11,11 @@ import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCrede
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.ec2.Ec2Client
 import software.amazon.awssdk.services.emr.EmrClient
+import software.amazon.awssdk.services.sns.SnsClient
 import software.amazon.awssdk.services.ssm.SsmClient
 import software.amazon.awssdk.services.sts.StsClient
-import software.amazon.awssdk.services.sts.model.AssumeRoleRequest
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider
+import software.amazon.awssdk.services.sts.model.AssumeRoleRequest
 
 object Client {
 
@@ -92,6 +93,19 @@ object Client {
       .foldLeft(SsmClient.builder())(_.region(_))
 
     assumeRoleCredentialsOpt(SsmClient.SERVICE_NAME) match {
+      case Some(stsAssumeRoleCredentials) =>
+        clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
+      case None =>
+        staticCredentialsOpt
+          .map(clientBuilder.credentialsProvider(_).build())
+          .getOrElse(clientBuilder.build())
+    }
+  }
+
+  def sns(): SnsClient = {
+    val clientBuilder = clientRegionOpt.foldLeft(SnsClient.builder())(_.region(_))
+
+    assumeRoleCredentialsOpt(SnsClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
       case None =>

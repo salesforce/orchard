@@ -13,13 +13,16 @@ import com.salesforce.mce.orchard.db._
 
 object GenerateSQLStatements extends App {
 
-  val schema = WorkflowTable().schema ++
+  val schema =
+    WorkflowTable().schema ++
     ResourceTable().schema ++
     ResourceInstanceTable().schema ++
     ActivityTable().schema ++
     DependencyTable().schema ++
     ActivityAttemptTable().schema ++
-    WorkflowManagerTable().schema
+    WorkflowManagerTable().schema ++
+    ActionTable().schema ++
+    ActivityActionTable().schema
 
   schema.createStatements.foreach(println)
 

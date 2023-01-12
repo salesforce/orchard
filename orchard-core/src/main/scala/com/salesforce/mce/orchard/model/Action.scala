@@ -9,13 +9,9 @@ package com.salesforce.mce.orchard.model
 
 import play.api.libs.json.JsValue
 
-case class Activity(
+case class Action(
   id: String,
   name: String,
-  activityType: String,
-  activitySpec: JsValue,
-  resourceId: String,
-  maxAttempt: Int,
-  onSuccess: Seq[String],
-  onFailure: Seq[String]
+  actionType: String,
+  actionSpec: JsValue
 )

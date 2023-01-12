@@ -15,7 +15,7 @@ import com.salesforce.mce.orchard.model.Status
 
 class WorkflowTable(tag: Tag) extends Table[WorkflowTable.R](tag, "workflows") {
 
-  def id = column[String]("id", O.PrimaryKey, O.SqlType("VARCHAR(64)"))
+  def id = column[String]("id", O.PrimaryKey, O.SqlType(WorkflowTable.IdSqlType))
 
   def name = column[String]("name", O.SqlType("VARCHAR(256)"))
 
@@ -32,6 +32,8 @@ class WorkflowTable(tag: Tag) extends Table[WorkflowTable.R](tag, "workflows") {
 }
 
 object WorkflowTable {
+
+  final val IdSqlType = "VARCHAR(64)"
 
   def apply() = TableQuery[WorkflowTable]
 

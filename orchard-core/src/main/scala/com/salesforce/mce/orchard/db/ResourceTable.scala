@@ -16,7 +16,7 @@ import com.salesforce.mce.orchard.model.Status
 
 class ResourceTable(tag: Tag) extends Table[ResourceTable.R](tag, "resources") {
 
-  def workflowId = column[String]("workflow_id", O.SqlType("VARCHAR(64)"))
+  def workflowId = column[String]("workflow_id", O.SqlType(WorkflowTable.IdSqlType))
 
   def resourceId = column[String]("resource_id", O.SqlType("VARCHAR(64)"))
 

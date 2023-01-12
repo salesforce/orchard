@@ -20,6 +20,7 @@ object WorkflowMgr {
 
   case class ActivityCompleted(activityId: String, status: Status.Value) extends Msg
   case class ResourceTerminated(resourceId: String, status: Status.Value) extends Msg
+  case object ActionCompleted extends Msg
   case object CancelWorkflow extends Msg
 
   case class Params(
@@ -35,7 +36,8 @@ object WorkflowMgr {
     // keeping track of resource and their associated manager actors
     resourceMgrs: Map[String, ActorRef[ResourceMgr.Msg]],
     // keeping track of activity and their associated manager actors
-    activityMgrs: Map[String, ActorRef[ActivityMgr.Msg]]
+    activityMgrs: Map[String, ActorRef[ActivityMgr.Msg]],
+    actionMgr: Option[ActorRef[ActionMgr.Msg]]
   )
 
   def apply(database: OrchardDatabase, workflowId: String): Behavior[Msg] = Behaviors.setup { ctx =>
@@ -62,6 +64,9 @@ object WorkflowMgr {
       )
     }.toMap
 
+    val actionMgr = ctx.spawn(ActionMgr(database, ctx.self, workflowId), "acn-mgr")
+    ctx.watchWith(actionMgr, ActionCompleted)
+
     val ps = Params(
       ctx,
       database,
@@ -71,7 +76,8 @@ object WorkflowMgr {
       graph,
       activityResources,
       resourceMgrs,
-      Map.empty
+      Map.empty,
+      Option(actionMgr)
     )
     val newState = scheduleNextActivities(ctx, database, ps, Status.Finished)
 
@@ -87,6 +93,10 @@ object WorkflowMgr {
 
     case ActivityCompleted(activityId, actStatus) =>
       ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
+
+      // trigger the necessary action
+      ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
+
       val nextStatus = actStatus match {
         case Status.Canceled => Status.Canceled
         case Status.Finished => Status.Finished
@@ -98,6 +108,7 @@ object WorkflowMgr {
       val newActivityResources = ps.activityResources - activityId
 
       val rscId = ps.activityResources(activityId)
+      // if no other activities depend on the resource, we can shut it down
       if (!newActivityResources.values.toSet.contains(rscId)) {
         ps.resourceMgrs(rscId) ! ResourceMgr.Shutdown(Status.Finished)
       }
@@ -128,6 +139,12 @@ object WorkflowMgr {
 
       val newState = ps.copy(resourceMgrs = newResourceMgrs)
 
+      if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
+      else active(ctx, database, newState)
+
+    case ActionCompleted =>
+      ctx.log.info(s"${ctx.self} (active) received ActionCompleted")
+      val newState = ps.copy(actionMgr = None)
       if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
       else active(ctx, database, newState)
 
@@ -176,7 +193,7 @@ object WorkflowMgr {
     database: OrchardDatabase,
     ps: Params
   ): Boolean =
-    if (ps.activityMgrs.isEmpty && ps.resourceMgrs.isEmpty) {
+    if (ps.activityMgrs.isEmpty && ps.resourceMgrs.isEmpty && ps.actionMgr.isEmpty) {
       val newStatus =
         if (!Status.TerminatedStatuses.contains(ps.status)) Status.Finished else ps.status
       database.sync(ps.query.setTerminated(newStatus))

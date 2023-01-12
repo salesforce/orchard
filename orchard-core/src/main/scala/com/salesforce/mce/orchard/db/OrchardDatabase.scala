@@ -16,8 +16,8 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import com.typesafe.config.Config
 import slick.jdbc.PostgresProfile.api._
 
-import com.salesforce.mce.orchard.model.{Status, Workflow}
 import com.salesforce.mce.orchard.OrchardSettings
+import com.salesforce.mce.orchard.model.{ActionCondition, ActionStatus, Status, Workflow}
 
 class OrchardDatabase(conf: Config) {
 
@@ -38,6 +38,17 @@ class OrchardDatabase(conf: Config) {
         None,
         None
       )
+
+    val addActions =
+      ActionTable() ++= workflow.actions.map { a =>
+        ActionTable.R(
+          workflowId,
+          a.id,
+          a.name,
+          a.actionType,
+          a.actionSpec
+        )
+      }
 
     val addResources = ResourceTable() ++= workflow.resources.map { r =>
       ResourceTable.R(
@@ -71,6 +82,29 @@ class OrchardDatabase(conf: Config) {
       )
     }
 
+    val addActivityActions = ActivityActionTable() ++= workflow.activities.flatMap { act =>
+      act.onSuccess.map { actn =>
+        ActivityActionTable.R(
+          workflowId,
+          act.id,
+          ActionCondition.OnSuccess,
+          actn,
+          ActionStatus.Pending,
+          ""
+        )
+      } ++
+      act.onFailure.map { actn =>
+        ActivityActionTable.R(
+          workflowId,
+          act.id,
+          ActionCondition.OnFailure,
+          actn,
+          ActionStatus.Pending,
+          ""
+        )
+      }
+    }
+
     val addDependencies = DependencyTable() ++= (
       for {
         (dependent, acts) <- workflow.dependencies.toSeq
@@ -79,7 +113,18 @@ class OrchardDatabase(conf: Config) {
     )
 
     connection
-      .run(DBIO.seq(addWorkflow, addResources, addActivities, addDependencies))
+      .run(
+        DBIO
+          .seq(
+            addWorkflow,
+            addActions,
+            addResources,
+            addActivities,
+            addActivityActions,
+            addDependencies
+          )
+          .transactionally
+      )
       .map(_ => workflowId)
   }
 

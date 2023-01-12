@@ -14,7 +14,8 @@ case class WorkflowRequest(
   activities: Seq[WorkflowRequest.Activity],
   resources: Seq[WorkflowRequest.Resource],
   // key depends on values
-  dependencies: Map[String, Seq[String]]
+  dependencies: Map[String, Seq[String]],
+  actions: Seq[WorkflowRequest.Action]
 )
 
 object WorkflowRequest {
@@ -34,12 +35,23 @@ object WorkflowRequest {
     activityType: String,
     activitySpec: JsValue,
     resourceId: String,
-    maxAttempt: Int
+    maxAttempt: Int,
+    onSuccess: Option[Seq[String]],
+    onFailure: Option[Seq[String]]
+  )
+
+  case class Action(
+    id: String,
+    name: String,
+    actionType: String,
+    actionSpec: JsValue
   )
 
   implicit val activityReads = Json.reads[Activity]
 
   implicit val resourceReads = Json.reads[Resource]
+
+  implicit val actionReads = Json.reads[Action]
 
   implicit val workflowRequestReads = Json.reads[WorkflowRequest]
 
