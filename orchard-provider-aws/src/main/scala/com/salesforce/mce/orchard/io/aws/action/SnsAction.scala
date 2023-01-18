@@ -41,8 +41,20 @@ object SnsAction {
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
 
+  private def fillContext(content: String, conf: ActionIO.Conf): String =
+    content.replace("{{workflowId}}", conf.workflowId)
+      .replace("{{activityId}}", conf.activityId)
+      .replace("{{actionId}}", conf.actionId)
+
+  def compileSpec(spec: Spec, conf: ActionIO.Conf): Spec = {
+    spec.copy(
+      subject = fillContext(spec.subject, conf),
+      message = fillContext(spec.message, conf)
+    )
+  }
+
   def decode(conf: ActionIO.Conf): JsResult[SnsAction] = conf.actionSpec
     .validate[Spec]
-    .map(spec => SnsAction(spec))
+    .map(spec => SnsAction(compileSpec(spec, conf)))
 
 }

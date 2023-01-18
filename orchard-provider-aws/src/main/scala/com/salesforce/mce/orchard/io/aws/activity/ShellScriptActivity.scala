@@ -119,7 +119,7 @@ object ShellScriptActivity {
       ShellScriptActivity(
         s"${conf.workflowId}_act-${conf.activityId}_${conf.attemptId}",
         spec.scriptLocation,
-        spec.args,
+        spec.args.map(ActivityContext.replace(_, conf)),
         ec2InstanceId,
         spec.outputUri,
         spec.executionTimeout,
