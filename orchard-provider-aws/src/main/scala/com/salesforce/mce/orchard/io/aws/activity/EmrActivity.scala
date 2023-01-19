@@ -101,11 +101,17 @@ object EmrActivity {
 
   case class Step(jar: String, args: Seq[String])
 
+  private def applyContext(step: Step, ctx: ActivityIO.Conf) = step.copy(
+    args = step.args.map(ActivityContext.replace(_, ctx))
+  )
+
   implicit val stepReads = Json.reads[Step]
 
   def decode(conf: ActivityIO.Conf): JsResult[EmrActivity] = {
     for {
-      steps <- (conf.activitySpec \ "steps").validate[Seq[EmrActivity.Step]]
+      steps <- (conf.activitySpec \ "steps")
+        .validate[Seq[EmrActivity.Step]]
+        .map(_.map(applyContext(_, conf)))
       clusterId <- (conf.resourceInstSpec \ "clusterId").validate[String]
     } yield {
       EmrActivity(s"${conf.workflowId}_act-${conf.activityId}_${conf.attemptId}", steps, clusterId)
