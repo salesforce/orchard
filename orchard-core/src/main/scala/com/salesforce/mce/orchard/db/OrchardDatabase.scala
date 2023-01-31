@@ -51,6 +51,10 @@ class OrchardDatabase(conf: Config) {
       }
 
     val addResources = ResourceTable() ++= workflow.resources.map { r =>
+      assert(
+        r.terminateAfter > 0D && r.terminateAfter <= 8D,
+        "terminateAfter must be within (0, 8]"
+      )
       ResourceTable.R(
         workflowId,
         r.id,
