@@ -7,7 +7,6 @@
 
 package com.salesforce.mce.orchard.io.aws
 
-import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.ec2.Ec2Client
 import software.amazon.awssdk.services.emr.EmrClient
@@ -23,13 +22,6 @@ object Client {
     clientRegion <- ProviderSettings().awsClientRegion
   } yield Region.of(clientRegion)
 
-  def staticCredentialsOpt: Option[StaticCredentialsProvider] = for {
-    awsAccessKeyId <- ProviderSettings().awsAccessKeyId
-    awsSecretKey <- ProviderSettings().awsSecretKey
-  } yield StaticCredentialsProvider.create(
-    AwsBasicCredentials.create(awsAccessKeyId, awsSecretKey)
-  )
-
   def assumeRoleCredentialsOpt(clientType: String): Option[StsAssumeRoleCredentialsProvider] = {
     for {
       awsAssumeRoleArn <- ProviderSettings().awsAssumeRoleArn
@@ -38,10 +30,11 @@ object Client {
       val stsClientBuilder = clientRegionOpt
         .foldLeft(StsClient.builder())(_.region(_))
 
-      val stsClient = staticCredentialsOpt
-        .fold(stsClientBuilder.build())(
-          stsClientBuilder.credentialsProvider(_).build()
-        )
+      /**
+       * DefaultCredentialsProvider used here
+       * See: https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/setup.html#setup-credentials
+       */
+      val stsClient = stsClientBuilder.build()
 
       val assumeRoleRequest = AssumeRoleRequest
         .builder()
@@ -65,10 +58,7 @@ object Client {
     assumeRoleCredentialsOpt(Ec2Client.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
-      case None =>
-        staticCredentialsOpt
-          .map(clientBuilder.credentialsProvider(_).build())
-          .getOrElse(clientBuilder.build())
+      case None => clientBuilder.build()
     }
   }
 
@@ -80,10 +70,7 @@ object Client {
     assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
-      case None =>
-        staticCredentialsOpt
-          .map(clientBuilder.credentialsProvider(_).build())
-          .getOrElse(clientBuilder.build())
+      case None => clientBuilder.build()
     }
   }
 
@@ -95,10 +82,7 @@ object Client {
     assumeRoleCredentialsOpt(SsmClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
-      case None =>
-        staticCredentialsOpt
-          .map(clientBuilder.credentialsProvider(_).build())
-          .getOrElse(clientBuilder.build())
+      case None => clientBuilder.build()
     }
   }
 
@@ -108,10 +92,7 @@ object Client {
     assumeRoleCredentialsOpt(SnsClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
-      case None =>
-        staticCredentialsOpt
-          .map(clientBuilder.credentialsProvider(_).build())
-          .getOrElse(clientBuilder.build())
+      case None => clientBuilder.build()
     }
   }
 }
