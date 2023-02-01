@@ -32,45 +32,52 @@ class WorkflowController @Inject() (
 )(implicit ec: ExecutionContext)
     extends AbstractController(cc) with Logging {
 
-  private def processWorkflowRequest(request: WorkflowRequest): Future[String] = {
+  private def processWorkflowRequest(workflowRequest: WorkflowRequest): Future[Either[String, String]] = {
     // TODO make sure to validate the workflow request (i.e. all IDs exists and it's a DAG)
 
-    db.orchardDB.createWorkflow(
-      Workflow(
-        request.name,
-        request.activities.map { a =>
-          Activity(
-            a.id,
-            a.name,
-            a.activityType,
-            a.activitySpec,
-            a.resourceId,
-            a.maxAttempt,
-            a.onSuccess.getOrElse(Seq.empty),
-            a.onFailure.getOrElse(Seq.empty)
+    validateResources(workflowRequest)
+      .fold(
+        e =>
+          Future.successful(Left(e)),
+        request =>
+          db.orchardDB.createWorkflow(
+            Workflow(
+              request.name,
+              request.activities.map { a =>
+                Activity(
+                  a.id,
+                  a.name,
+                  a.activityType,
+                  a.activitySpec,
+                  a.resourceId,
+                  a.maxAttempt,
+                  a.onSuccess.getOrElse(Seq.empty),
+                  a.onFailure.getOrElse(Seq.empty)
+                )
+              },
+              request.resources.map { r =>
+                Resource(
+                  r.id,
+                  r.name,
+                  r.resourceType,
+                  r.resourceSpec,
+                  r.maxAttempt,
+                  r.terminateAfter.getOrElse(8)
+                )
+              },
+              request.dependencies,
+              request.actions.map { r =>
+                WfAction(
+                  r.id,
+                  r.name,
+                  r.actionType,
+                  r.actionSpec
+                )
+              }
+            )
           )
-        },
-        request.resources.map { r =>
-          Resource(
-            r.id,
-            r.name,
-            r.resourceType,
-            r.resourceSpec,
-            r.maxAttempt,
-            r.terminateAfter.getOrElse(8)
-          )
-        },
-        request.dependencies,
-        request.actions.map { r =>
-          WfAction(
-            r.id,
-            r.name,
-            r.actionType,
-            r.actionSpec
-          )
-        }
+            .map(Right(_))
       )
-    )
   }
 
   private def validateResources(request: WorkflowRequest): Either[String, WorkflowRequest] = {
@@ -89,9 +96,9 @@ class WorkflowController @Inject() (
       } yield resource.maxAttempt
 
     if (invalidTerminateAt.nonEmpty) {
-      Left("Invalid terminateAt value")
+      Left("Invalid terminateAt value, must be a value within (0, 24 * 30].")
     } else if (invalidMaxAttempts.nonEmpty) {
-      Left("Invalid maxAttempt value")
+      Left("Invalid maxAttempt value, must be a value greater than 0.")
     } else {
       Right(request)
     }
@@ -108,12 +115,13 @@ class WorkflowController @Inject() (
               Future.successful(BadRequest(errorJson))
             },
             workflowReq => {
-              validateResources(workflowReq)
-                .fold(
-                  e =>
-                    Future.successful(BadRequest(JsString(e))),
-                  req =>
-                    processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
+              processWorkflowRequest(workflowReq)
+                .map(workflowId =>
+                  workflowId
+                    .fold(
+                      e => BadRequest(JsString(e)),
+                      id => Ok(JsString(id))
+                    )
                 )
             }
           )
