@@ -79,7 +79,7 @@ object ResourceMgr {
 
     resourceR.status match {
       case Status.Pending =>
-        idle(ps, resourceR.resourceType, resourceR.resourceSpec)
+        idle(ps)
 
       case Status.Running =>
         val resourceInsts = database.sync(resourceQuery.instances())
@@ -120,9 +120,7 @@ object ResourceMgr {
   }
 
   def idle(
-    ps: Params,
-    resourceType: String,
-    resourceSpec: JsValue
+    ps: Params
   ): Behavior[Msg] = Behaviors.receiveMessage {
 
     case GetResourceInstSpec(replyTo) =>

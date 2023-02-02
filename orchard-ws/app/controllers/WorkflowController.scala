@@ -34,7 +34,6 @@ class WorkflowController @Inject() (
 
   private def processWorkflowRequest(request: WorkflowRequest): Future[String] = {
     // TODO make sure to validate the workflow request (i.e. all IDs exists and it's a DAG)
-
     db.orchardDB.createWorkflow(
       Workflow(
         request.name,
@@ -73,6 +72,30 @@ class WorkflowController @Inject() (
     )
   }
 
+  private def validateResources(request: WorkflowRequest): Either[String, WorkflowRequest] = {
+
+    val invalidTerminateAt =
+      for {
+        resource <- request.resources
+        terminateAt <- resource.terminateAfter
+        if terminateAt <= 0 || terminateAt > 24 * 30
+      } yield terminateAt
+
+    val invalidMaxAttempts =
+      for {
+        resource <- request.resources
+        if resource.maxAttempt <= 0 || resource.maxAttempt > 100
+      } yield resource.maxAttempt
+
+    if (invalidTerminateAt.nonEmpty) {
+      Left("Invalid terminateAt value, must be a value within (0, 24 * 30].")
+    } else if (invalidMaxAttempts.nonEmpty) {
+      Left("Invalid maxAttempt value, must be a value greater than 0.")
+    } else {
+      Right(request)
+    }
+  }
+
   def post() = authAction.async(parse.json) { request =>
     request match {
       case ValidApiRequest(apiRole, req) =>
@@ -84,7 +107,13 @@ class WorkflowController @Inject() (
               Future.successful(BadRequest(errorJson))
             },
             workflowReq => {
-              processWorkflowRequest(workflowReq).map(workflowId => Ok(JsString(workflowId)))
+              validateResources(workflowReq)
+                .fold(
+                  e =>
+                    Future.successful(BadRequest(JsString(e))),
+                  req =>
+                    processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
+                )
             }
           )
       case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
