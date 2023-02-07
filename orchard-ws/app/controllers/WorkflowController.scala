@@ -72,7 +72,7 @@ class WorkflowController @Inject() (
     )
   }
 
-  private def validateResources(request: WorkflowRequest): Either[String, WorkflowRequest] = {
+  private def validatePayload(request: WorkflowRequest): Either[String, WorkflowRequest] = {
 
     val invalidTerminateAt =
       for {
@@ -87,10 +87,26 @@ class WorkflowController @Inject() (
         if resource.maxAttempt <= 0 || resource.maxAttempt > 100
       } yield resource.maxAttempt
 
+    val definedResIds = request.resources.map(_.id)
+    val invalidResourceDefined = for {
+      referredId <- request.activities.map(_.resourceId)
+      if !definedResIds.contains(referredId)
+    } yield referredId
+
+    val definedActIds = request.activities.map(_.id)
+    val invalidActDependencies = for {
+      (src, dest) <- request.dependencies
+      if !(definedActIds.contains(src) && dest.toSet.subsetOf(definedActIds.toSet))
+    } yield (src, dest)
+
     if (invalidTerminateAt.nonEmpty) {
       Left("Invalid terminateAt value, must be a value within (0, 24 * 30].")
     } else if (invalidMaxAttempts.nonEmpty) {
       Left("Invalid maxAttempt value, must be a value greater than 0.")
+    } else if (invalidResourceDefined.nonEmpty) {
+      Left("Workflow activities refers to undefined resource id.")
+    } else if (invalidActDependencies.nonEmpty) {
+      Left("Workflow dependencies refer to undefined activity.")
     } else {
       Right(request)
     }
@@ -107,12 +123,10 @@ class WorkflowController @Inject() (
               Future.successful(BadRequest(errorJson))
             },
             workflowReq => {
-              validateResources(workflowReq)
+              validatePayload(workflowReq)
                 .fold(
-                  e =>
-                    Future.successful(BadRequest(JsString(e))),
-                  req =>
-                    processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
+                  e => Future.successful(BadRequest(JsString(e))),
+                  req => processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
                 )
             }
           )
