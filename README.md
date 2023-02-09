@@ -61,22 +61,7 @@ If deployed into a cloud environment like AWS, Orchard will need a role with an 
 
 Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependent on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-You can generate an example workflow which will execute a number of activities in an AWS VPC environment with the following command:
-
-```
-cd example/data
-mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
-```
-
-We used [mustache](https://github.com/janl/mustache.js/) to substitute values defined in [./examples/data/sample_workflow_view.json] into the final payload.
-
-You can install `mustache` with the following command:
-```
-npm install -g mustache
-```
-
-
-To submit this request to Orchard:
+To submit a workflow request to Orchard:
 ```html
 POST http://localhost:9001/v1/workflow
 ```
@@ -86,6 +71,36 @@ Once defined, activate a workflow using the workflow id like so:
 ```html
 PUT http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
 ```
+
+### Workflow examples
+
+You can generate an example workflow which will execute a number of activities in an AWS VPC environment with the following command:
+
+```
+cd example/data
+mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
+```
+
+We used [mustache](https://github.com/janl/mustache.js/) to substitute values specific to a given AWS account into the final payload. You can install `mustache` with `npm install -g mustache`.
+
+For example, [sample_workflow_view.json](./examples/data/sample_workflow_view.json) defines `subnetId`, `s3bucket`, etc.  Change these to match your specific needs:
+
+```
+{
+  "resources": {
+    "subnetId": "subnet-xxxxxxxx"
+  },
+  "s3bucket": "my-bucket-name",
+  "sparkConfig": {
+    "env_key": "REGION_ENV_KEY",
+    "env_val": "uswest-cloud-trust"
+  }
+}
+```
+
+[sample_workflow.json.mustache](./example/data/sample_workflow.json.mustache) contains a mustache template which can accept these substitutions.
+
+
 
 **Resource and Activity Types**
 
