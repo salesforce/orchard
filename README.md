@@ -61,17 +61,6 @@ If deployed into a cloud environment like AWS, Orchard will need a role with an 
 
 Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependent on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-To submit a workflow request to Orchard:
-```html
-POST http://localhost:9001/v1/workflow
-```
-Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
-
-Once defined, activate a workflow using the workflow id like so:
-```html
-PUT http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
-```
-
 ### Workflow examples
 
 You can generate an example workflow which will execute a number of activities in an AWS VPC environment with the following command:
@@ -100,7 +89,18 @@ For example, you can create a file `example/data/sample_workflow_view.json` to d
 
 [sample_workflow.json.mustache](./example/data/sample_workflow.json.mustache) contains a mustache template which can accept these substitutions.
 
-Once generated, your `sample_workflow.json` can be used to create a workflow via `POST http://localhost:9001/v1/workflow`.
+Once generated, your `sample_workflow.json` can be used to create a workflow:
+
+```html
+POST http://localhost:9001/v1/workflow
+```
+
+Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
+
+Once defined, activate a workflow using the workflow id like so:
+```html
+PUT http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
+```
 
 **Resource and Activity Types**
 
