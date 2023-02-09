@@ -59,46 +59,22 @@ Once the setup is complete, Orchard is ready to receive a number of different in
 
 If deployed into a cloud environment like AWS, Orchard will need a role with an appropriate set of permissions appropriate for the activities. 
 
-Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependant on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
+Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependent on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-Below is an example workflow that defines a number of activities to be executed in an AWS VPC environment:
-
-You can generate an example workflow with the following command:
+You can generate an example workflow which will execute a number of activities in an AWS VPC environment with the following command:
 
 ```
 cd example/data
 mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
 ```
 
-You can find more about the command `mustache`
-[here](https://github.com/janl/mustache.js/). 
+We used [mustache](https://github.com/janl/mustache.js/) to substitute values defined in [./examples/data/sample_workflow_view.json] into the final payload.
 
-If `mustache` command is not found after install, run 
-```
-npm bin mustache
-```
-and add the binary path (for example `~/node_modules/.bin`) to your local PATH.
-
-Or simply install `mustache` globally if you don't need to add it to the PATH.
+You can install `mustache` with the following command:
 ```
 npm install -g mustache
 ```
 
-Below is an example of
-`sample_workflow_view.json`:
-
-```json
-{
-  "resources": {
-    "subnetId": "subnet-xxxxxxxx"
-  },
-  "s3bucket": "my-bucket-name",
-  "sparkConfig": {
-    "env_key": "REGION_ENV_KEY",
-    "env_val": "uswest-cloud-trust"
-  }
-}
-```
 
 To submit this request to Orchard:
 ```html
