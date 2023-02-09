@@ -1,0 +1,55 @@
+{
+    "name": "test workflow for ec2",
+    "resources": [
+        {
+            "id": "resourceId_1",
+            "name": "ec2_spot_market",
+            "resourceType": "aws.resource.Ec2Resource",
+            "resourceSpec": {
+                "amiImageId": "{{resources.amiImageId}}",
+                "subnetId": "{{resources.subnetId}}",
+                "instanceType": "t2.micro",
+                "instanceProfile": "{{instanceProfile}}",
+                "tags":[],
+                "spotInstance": true
+            },
+            "maxAttempt": 2
+        }
+    ],
+  "activities": [
+    {
+      "id": "activityId_2",
+      "name": "shell_script_java_activity",
+      "activityType": "aws.activity.ShellScriptActivity",
+      "activitySpec": {
+        "scriptLocation": "{{s3ScriptLocation}}",
+        "args": ["javaOptions='-Xms128m -Xmx512m'",
+          "mainClass='{{mainClass}}'",
+          "args='Lorem ipsum dolor sit amet= consectetur adipiscing elit. Aliquam risus elit'"],
+        "outputS3BucketName": "{{outputS3Bucket}}",
+        "outputS3KeyPrefix": "{{outputS3KeyPrefix}}",
+        "executionTimeout": 3600,
+        "deliveryTimeout": 600
+      },
+      "resourceId": "resourceId_1",
+      "maxAttempt": 2
+    },
+    {
+      "id": "activityId_3",
+      "name": "shell_command_activity",
+      "activityType": "aws.activity.ShellCommandActivity",
+      "activitySpec": {
+        "lines": ["echo success completion"],
+        "outputS3BucketName": "{{outputS3Bucket}}",
+        "outputS3KeyPrefix": "cmd-ssm",
+        "executionTimeout": 3600,
+        "deliveryTimeout": 600
+      },
+      "resourceId": "resourceId_1",
+      "maxAttempt": 1
+    }
+  ],
+  "dependencies": {
+    "activityId_3": ["activityId_2"]
+  }
+}
