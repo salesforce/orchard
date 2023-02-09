@@ -67,7 +67,7 @@ You can generate an example workflow with the following command:
 
 ```
 cd example/data
-mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
+mustache sample_workflow_emr_view.json sample_workflow_emr.json.mustache > sample_workflow_emr.json
 ```
 
 You can find more about the command `mustache`
@@ -85,7 +85,7 @@ npm install -g mustache
 ```
 
 Below is an example of
-`sample_workflow_view.json`:
+`sample_workflow_emr_view.json`:
 
 ```json
 {
