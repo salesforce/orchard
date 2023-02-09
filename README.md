@@ -83,7 +83,7 @@ mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workfl
 
 We used [mustache](https://github.com/janl/mustache.js/) to substitute values specific to a given AWS account into the final payload. You can install `mustache` with `npm install -g mustache`.
 
-For example, [sample_workflow_view.json](./example/data/sample_workflow_view.json) defines `subnetId`, `s3bucket`, etc.  Change these to match your specific needs:
+For example, you can create a file `example/data/sample_workflow_view.json` to define `subnetId`, `s3bucket`, etc.  Change these to match your specific needs:
 
 ```
 {
