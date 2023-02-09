@@ -48,9 +48,9 @@ This will start the database container, provision the required tables, and start
 Orchard is by default running a development configuration where authentication is disabled. To enable API authentication, set `orchard.auth.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). Orchard will then pull the keys specified in 
 ```
 hashed-keys = {
-        user = [ ${?MCE_ENV_X_API_USER1} , ${?MCE_ENV_X_API_USER2} ]
-        admin = [ ${?MCE_ENV_X_API_ADMIN1} , ${?MCE_ENV_X_API_ADMIN2} ]
-    }
+  user = [ ${?MCE_ENV_X_API_USER1} , ${?MCE_ENV_X_API_USER2} ]
+  admin = [ ${?MCE_ENV_X_API_ADMIN1} , ${?MCE_ENV_X_API_ADMIN2} ]
+}
 ```
 which must match the key provided in the header of any inbound API requests. 
 
