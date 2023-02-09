@@ -100,6 +100,8 @@ For example, [sample_workflow_view.json](./example/data/sample_workflow_view.jso
 
 [sample_workflow.json.mustache](./example/data/sample_workflow.json.mustache) contains a mustache template which can accept these substitutions.
 
+Once generated, your `sample_workflow.json` can be used to create a workflow via `POST http://localhost:9001/v1/workflow`.
+
 **Resource and Activity Types**
 
 In the above example workflow, the activities and resources used are **stubs**. In an actual deployment, Orchard will be using resources and activities specific to the chosen cloud provider's environment, like AWS' EC2 or EMI. Each activity has its own `activitySpec`, which contains configuration needed to carry out that activity.
