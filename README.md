@@ -48,9 +48,9 @@ This will start the database container, provision the required tables, and start
 Orchard is by default running a development configuration where authentication is disabled. To enable API authentication, set `orchard.auth.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). Orchard will then pull the keys specified in 
 ```
 hashed-keys = {
-        user = [ ${?MCE_ENV_X_API_USER1} , ${?MCE_ENV_X_API_USER2} ]
-        admin = [ ${?MCE_ENV_X_API_ADMIN1} , ${?MCE_ENV_X_API_ADMIN2} ]
-    }
+  user = [ ${?MCE_ENV_X_API_USER1} , ${?MCE_ENV_X_API_USER2} ]
+  admin = [ ${?MCE_ENV_X_API_ADMIN1} , ${?MCE_ENV_X_API_ADMIN2} ]
+}
 ```
 which must match the key provided in the header of any inbound API requests. 
 
@@ -59,35 +59,22 @@ Once the setup is complete, Orchard is ready to receive a number of different in
 
 If deployed into a cloud environment like AWS, Orchard will need a role with an appropriate set of permissions appropriate for the activities. 
 
-Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependant on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
+Orchard allows the definition and execution of **workflows**, where each workflow consists of a number of **activities**. Activities can be dependent on other activities, forming a directed acyclic graph (DAG). Orchard will execute activities concurrently whenever possible.
 
-Below is an example workflow that defines a number of activities to be executed in an AWS VPC environment:
+### Workflow examples
 
-You can generate an example workflow with the following command:
+You can generate an example workflow which will execute a number of activities in an AWS VPC environment with the following command:
 
 ```
 cd example/data
 mustache sample_workflow_view.json sample_workflow.json.mustache > sample_workflow.json
 ```
 
-You can find more about the command `mustache`
-[here](https://github.com/janl/mustache.js/). 
+We used [mustache](https://github.com/janl/mustache.js/) to substitute values specific to a given AWS account into the final payload. You can install `mustache` with `npm install -g mustache`.
 
-If `mustache` command is not found after install, run 
-```
-npm bin mustache
-```
-and add the binary path (for example `~/node_modules/.bin`) to your local PATH.
+For example, you can create a file `example/data/sample_workflow_view.json` to define `subnetId`, `s3bucket`, etc.  Change these to match your specific needs:
 
-Or simply install `mustache` globally if you don't need to add it to the PATH.
 ```
-npm install -g mustache
-```
-
-Below is an example of
-`sample_workflow_view.json`:
-
-```json
 {
   "resources": {
     "subnetId": "subnet-xxxxxxxx"
@@ -100,10 +87,14 @@ Below is an example of
 }
 ```
 
-To submit this request to Orchard:
+[sample_workflow.json.mustache](./example/data/sample_workflow.json.mustache) contains a mustache template which can accept these substitutions.
+
+Once generated, your `sample_workflow.json` can be used to create a workflow:
+
 ```html
 POST http://localhost:9001/v1/workflow
 ```
+
 Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
 
 Once defined, activate a workflow using the workflow id like so:
