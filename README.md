@@ -19,8 +19,16 @@ Orchard is designed to be deployed into a cloud environment as a service, but ca
 git clone git@github.com:salesforce/orchard.git
 
 # use sdkman to install Scala Build Tool (SBT) (if needed)
+# you can also read https://sdkman.io/usage for a more personalized sdk
+# experience
 curl -s "https://get.sdkman.io" | bash
 sdk install sbt
+
+# if you don't have the right java installed, run the following command
+sdk env install
+
+# switch to use the correct java version defined in .sdkmanrc
+sdk env
 
 # use brew to install postman (for API calls) and docker (if needed)
 brew install -cask postman
