@@ -1,10 +1,9 @@
 val slickVersion = "3.4.1"
 // make sure this is the same as the playWS's dependency
 val akkaVersion = "2.6.20"
-// make sure this is the same as the playWS's dependency
-val playJsonVersion = "2.9.3"
-val awsVersion = "2.19.+"
-val stubbornVersion = "3.0.5"
+val playJsonVersion = "2.9.4"
+val awsVersion = "2.20.+"
+val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
 val awsEc2            = "software.amazon.awssdk"   % "ec2"                        % awsVersion
@@ -14,15 +13,14 @@ val awsSts            = "software.amazon.awssdk"   % "sts"                      
 val awsSns            = "software.amazon.awssdk"   % "sns"                        % awsVersion
 val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
 val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
-val postgresql        = "org.postgresql"           % "postgresql"                 % "42.5.1"
+val postgresql        = "org.postgresql"           % "postgresql"                 % "42.5.4"
 val playJson          = "com.typesafe.play"       %% "play-json"                  % playJsonVersion
 val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.15" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-// note cannote update to 1.4.x unless we start using java 11
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.3.5" % Test
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.5"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -64,7 +62,7 @@ lazy val orchardCore = (project in file("orchard-core")).
       playJson,
       akkaActor,
       akkaTestkit,
-      logback,
+      logback % Test,
       stubbornArtifact
     )
   )
@@ -81,7 +79,8 @@ lazy val orchardWS = (project in file("orchard-ws")).
       prometheusClient,
       prometheusCommon,
       prometheusHotSpot,
-      scalaPlusPlay
+      scalaPlusPlay,
+      logback
     ),
     dependencyOverrides ++= Seq(
       // fix https://nvd.nist.gov/vuln/detail/CVE-2022-42003
