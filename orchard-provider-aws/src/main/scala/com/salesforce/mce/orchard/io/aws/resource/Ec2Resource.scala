@@ -118,7 +118,9 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
             case InstanceStateName.RUNNING =>
               isSsmVisible(Json.toJson(Ec2Resource.InstSpec(ec2InstanceId))) match {
                 case true => Right(Status.Running)
-                case _ => Right(Status.Activating)
+                case _ =>
+                  logger.info(s"ec2InstanceId $ec2InstanceId isSsmVisible=false")
+                  Right(Status.Activating)
               }
             case InstanceStateName.TERMINATED => Right(Status.Finished)
             case InstanceStateName.STOPPING => Right(Status.Finished)
