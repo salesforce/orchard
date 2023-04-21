@@ -55,7 +55,7 @@ jobs:
 
   publish:
     docker:
-      - image: cimg/golang:latest
+      - image: cimg/go:latest
     steps:
       - checkout
       - attach_workspace:
