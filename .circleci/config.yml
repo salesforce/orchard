@@ -55,7 +55,7 @@ jobs:
 
   publish:
     docker:
-      - image: circleci/golang:latest
+      - image: cimg/golang:latest
     steps:
       - checkout
       - attach_workspace:
