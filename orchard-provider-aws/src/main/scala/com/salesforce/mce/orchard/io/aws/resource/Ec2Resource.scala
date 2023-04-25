@@ -12,6 +12,10 @@ import scala.jdk.CollectionConverters.CollectionHasAsScala
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
 import software.amazon.awssdk.services.ec2.model._
+import software.amazon.awssdk.services.ssm.model.{
+  DescribeInstanceInformationRequest,
+  InstanceInformationStringFilter
+}
 
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.io.ResourceIO
@@ -73,22 +77,31 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
   }
 
   /**
-   * @param instSpec
+   * @param instSpec holds ec2InstanceId
    * @return Boolean SSM has visibility to the EC2 instance
    */
   private def isSsmVisible(instSpec: JsValue): Boolean = {
     val ssmClient = Client.ssm()
-    val isVisible =
+    val infoReq = DescribeInstanceInformationRequest
+      .builder()
+      .filters(
+        InstanceInformationStringFilter
+          .builder()
+          .key("InstanceIds")
+          .values((instSpec \ "ec2InstanceId").as[String])
+          .build()
+      )
+      .build()
+    val resultSet =
       ssmClient
-        .describeInstanceInformation()
+        .describeInstanceInformation(infoReq)
         .instanceInformationList()
         .asScala
         .map(_.instanceId())
         .toSet
-        .contains((instSpec \ "ec2InstanceId").as[String])
         .retry()
     ssmClient.close()
-    isVisible
+    resultSet.nonEmpty
   }
 
   override def getStatus(instSpec: JsValue): Either[Throwable, Status.Value] = {
