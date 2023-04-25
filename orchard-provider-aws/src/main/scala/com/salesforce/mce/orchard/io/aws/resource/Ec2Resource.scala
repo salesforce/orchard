@@ -77,16 +77,19 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
   }
 
   /**
-   * @param instSpec
+   * @param instSpec holds ec2InstanceId
    * @return Boolean SSM has visibility to the EC2 instance
    */
   private def isSsmVisible(instSpec: JsValue): Boolean = {
-    val instanceId = (instSpec \ "ec2InstanceId").as[String]
     val ssmClient = Client.ssm()
     val infoReq = DescribeInstanceInformationRequest
       .builder()
       .filters(
-        InstanceInformationStringFilter.builder().key("InstanceIds").values(instanceId).build()
+        InstanceInformationStringFilter
+          .builder()
+          .key("InstanceIds")
+          .values((instSpec \ "ec2InstanceId").as[String])
+          .build()
       )
       .build()
     val resultSet =
