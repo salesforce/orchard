@@ -85,7 +85,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                       case (instRoleType, instGroupConfig) =>
                         val builder = InstanceGroupConfig
                           .builder()
-                          .name(s"$instRoleType")
+                          .name(s"orchard-$instRoleType".toLowerCase)
                           .instanceRole(instRoleType)
                           .instanceCount(instGroupConfig.instanceCount)
                           .instanceType(instGroupConfig.instanceType)
