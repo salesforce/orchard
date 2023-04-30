@@ -10,6 +10,7 @@ package com.salesforce.mce.orchard.io.aws.resource
 import java.util.UUID
 
 import scala.jdk.CollectionConverters._
+import scala.math.max
 
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
@@ -78,11 +79,25 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                 val builder = JobFlowInstancesConfig
                   .builder()
                   .ec2SubnetId(instancesConfig.subnetId)
-                  .instanceCount(instancesConfig.instanceCount)
-                  .masterInstanceType(instancesConfig.masterInstanceType)
-                  .slaveInstanceType(instancesConfig.slaveInstanceType)
                   .keepJobFlowAliveWhenNoSteps(true)
+                  .instanceGroups(
+                    instancesConfig.instanceGroupConfigs.map {
+                      case (instRoleType, instGroupConfig) =>
+                        val builder = InstanceGroupConfig
+                          .builder()
+                          .name(s"$instRoleType")
+                          .instanceRole(instRoleType)
+                          .instanceCount(instGroupConfig.instanceCount)
+                          .instanceType(instGroupConfig.instanceType)
 
+                        instGroupConfig.instanceBidPrice
+                          .fold(builder.market(MarketType.ON_DEMAND))(
+                            builder.bidPrice(_).market(MarketType.SPOT)
+                          )
+
+                        builder.build()
+                    }.toSeq: _*
+                  )
                 instancesConfig.ec2KeyName
                   .foldLeft(builder)(_.ec2KeyName(_))
                 instancesConfig.additionalMasterSecurityGroups
@@ -158,15 +173,32 @@ object EmrResource {
   implicit val instSpecWrites: Writes[InstSpec] = Json.writes[InstSpec]
   implicit val instSpecReads: Reads[InstSpec] = Json.reads[InstSpec]
 
+  case class InstanceGroupConfig(
+    instanceCount: Int,
+    instanceType: String,
+    instanceBidPrice: Option[String]
+  )
+
   case class InstancesConfig(
     subnetId: String,
     instanceCount: Int,
     masterInstanceType: String,
-    slaveInstanceType: String,
+    coreInstanceType: String,
+    masterInstanceBidPrice: Option[String],
+    coreInstanceBidPrice: Option[String],
     ec2KeyName: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
     additionalSlaveSecurityGroups: Option[Seq[String]]
-  )
+  ) {
+    val instanceGroupConfigs: Map[InstanceRoleType, InstanceGroupConfig] = Map(
+      InstanceRoleType.MASTER -> InstanceGroupConfig(
+        1, masterInstanceType, masterInstanceBidPrice
+      ),
+      InstanceRoleType.CORE -> InstanceGroupConfig(
+        max(instanceCount - 1, 1), coreInstanceType, coreInstanceBidPrice
+      )
+    )
+  }
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
   case class ConfigurationSpec(
