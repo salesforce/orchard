@@ -98,6 +98,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
                         builder.build()
                     }.toSeq: _*
                   )
+
                 instancesConfig.ec2KeyName
                   .foldLeft(builder)(_.ec2KeyName(_))
                 instancesConfig.additionalMasterSecurityGroups
