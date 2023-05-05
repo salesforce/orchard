@@ -77,10 +77,10 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
   }
 
   /**
-   * @param instSpec holds ec2InstanceId
+   * @param ec2InstanceId ec2InstanceId
    * @return Boolean SSM has visibility to the EC2 instance
    */
-  private def isSsmVisible(instSpec: JsValue): Boolean = {
+  private def isSsmVisible(ec2InstanceId: String): Boolean = {
     val ssmClient = Client.ssm()
     val infoReq = DescribeInstanceInformationRequest
       .builder()
@@ -88,7 +88,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         InstanceInformationStringFilter
           .builder()
           .key("InstanceIds")
-          .values((instSpec \ "ec2InstanceId").as[String])
+          .values(ec2InstanceId)
           .build()
       )
       .build()
@@ -102,6 +102,49 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         .retry()
     ssmClient.close()
     resultSet.nonEmpty
+  }
+
+  final val GoodSummaryStatuses = Set(SummaryStatus.INITIALIZING, SummaryStatus.OK)
+
+  /**
+   * when ssm does not yet have visibility to ec2, it could be initializing phase of the ec2 instance,
+   * or it could the ec2 has instanceStatus impaired.
+   * getStatus() performs this check to fail early in case the initialized ec2 instance status has issues,
+   * and the ResourceInstance logic can move on to the next attempt if available
+   * @param ec2InstanceId  ec2 instance id
+   * @return
+   */
+  def describeEc2Status(ec2InstanceId: String): Either[Throwable, Status.Value] = {
+    val client = Client.ec2()
+    val request = DescribeInstanceStatusRequest.builder().instanceIds(ec2InstanceId).build()
+    val response = client.describeInstanceStatus(request)
+    client.close()
+    val status = response.instanceStatuses().asScala
+    status.isEmpty match {
+      case true =>
+        Left(new Exception(s"Ec2 instance $ec2InstanceId describeInstanceStatus failed."))
+      case _ =>
+        val instanceStatus = status.head.instanceStatus().status()
+        val systemStatus = status.head.systemStatus().status()
+        if (!GoodSummaryStatuses.contains(instanceStatus)) {
+          Left(
+            new Exception(
+              s"Ec2 instance $ec2InstanceId instanceStatus=$instanceStatus."
+            )
+          )
+        } else if (!GoodSummaryStatuses.contains(status.head.systemStatus().status())) {
+          Left(
+            new Exception(
+              s"Ec2 instance $ec2InstanceId systemStatus=$systemStatus."
+            )
+          )
+        } else {
+          logger.debug(
+            s"Ec2 $ec2InstanceId instanceStatus=${instanceStatus.toString} systemStatus=${systemStatus.toString}"
+          )
+          Right(Status.Activating)
+        }
+    }
   }
 
   override def getStatus(instSpec: JsValue): Either[Throwable, Status.Value] = {
@@ -129,11 +172,11 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
           state.head match {
             case InstanceStateName.PENDING => Right(Status.Activating)
             case InstanceStateName.RUNNING =>
-              isSsmVisible(Json.toJson(Ec2Resource.InstSpec(ec2InstanceId))) match {
+              isSsmVisible(ec2InstanceId) match {
                 case true => Right(Status.Running)
                 case _ =>
                   logger.info(s"ec2InstanceId $ec2InstanceId isSsmVisible=false")
-                  Right(Status.Activating)
+                  describeEc2Status(ec2InstanceId)
               }
             case InstanceStateName.TERMINATED => Right(Status.Finished)
             case InstanceStateName.STOPPING => Right(Status.Finished)
