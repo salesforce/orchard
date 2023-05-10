@@ -125,12 +125,14 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         val instanceStatus = sts.instanceStatus().status()
         val systemStatus = sts.systemStatus().status()
         if (!GoodSummaryStatuses.contains(instanceStatus)) {
+          logger.info(s"Ec2 instance $ec2InstanceId instanceStatus=$instanceStatus}")
           Left(
             new Exception(
               s"Ec2 instance $ec2InstanceId instanceStatus=$instanceStatus."
             )
           )
-        } else if (!GoodSummaryStatuses.contains(status.head.systemStatus().status())) {
+        } else if (!GoodSummaryStatuses.contains(systemStatus)) {
+          logger.info(s"Ec2 instance $ec2InstanceId systemStatus=$systemStatus")
           Left(
             new Exception(
               s"Ec2 instance $ec2InstanceId systemStatus=$systemStatus."
@@ -138,7 +140,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
           )
         } else {
           logger.debug(
-            s"Ec2 $ec2InstanceId instanceStatus=${instanceStatus.toString} systemStatus=${systemStatus.toString}"
+            s"Ec2 $ec2InstanceId instanceStatus=${instanceStatus} systemStatus=$systemStatus"
           )
           Right(Status.Activating)
         }
