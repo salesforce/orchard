@@ -120,12 +120,10 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     val response = client.describeInstanceStatus(request)
     client.close()
     val status = response.instanceStatuses().asScala
-    status.isEmpty match {
-      case true =>
-        Left(new Exception(s"Ec2 instance $ec2InstanceId describeInstanceStatus failed."))
-      case _ =>
-        val instanceStatus = status.head.instanceStatus().status()
-        val systemStatus = status.head.systemStatus().status()
+    status.toList match {
+      case sts :: _ =>
+        val instanceStatus = sts.instanceStatus().status()
+        val systemStatus = sts.systemStatus().status()
         if (!GoodSummaryStatuses.contains(instanceStatus)) {
           Left(
             new Exception(
@@ -144,6 +142,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
           )
           Right(Status.Activating)
         }
+      case _ => Left(new Exception(s"Ec2 instance $ec2InstanceId describeInstanceStatus failed."))
     }
   }
 
