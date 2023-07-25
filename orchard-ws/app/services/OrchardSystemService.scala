@@ -10,12 +10,18 @@ package services
 import javax.inject._
 
 import akka.actor.ActorSystem
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
 
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 @Singleton
 class OrchardSystemService @Inject() (actorSystem: ActorSystem, databaseService: DatabaseService) {
-  val orchard =
-    actorSystem.spawn(OrchardSystem.apply(databaseService.orchardDB), "orchard-system")
+  private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] =
+    Behaviors
+      .supervise(OrchardSystem.apply(databaseService.orchardDB))
+      .onFailure[Exception](SupervisorStrategy.restart)
+  val orchard: ActorRef[OrchardSystem.Msg] =
+    actorSystem.spawn(supervisedOrchardSystem, "orchard-system")
 }

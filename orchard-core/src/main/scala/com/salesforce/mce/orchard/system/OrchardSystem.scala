@@ -93,13 +93,15 @@ object OrchardSystem {
       Behaviors.same
 
     case AdoptOrphanWorkflows =>
-      ctx.log.debug(s"${ctx.self} Received AdoptOrphanWorkflows")
+      ctx.log.info(s"${ctx.self} Received AdoptOrphanWorkflows")
       database
         .sync(query.getOrhpanWorkflows(5.minutes, 1.day))
         .flatMap {
           case (wf, Some(wm)) =>
-            if (database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
-              database.sync(query.manage(wf.id)) > 0) {
+            if (
+              database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
+              database.sync(query.manage(wf.id)) > 0
+            ) {
 
               Some(wf.id)
             } else {
