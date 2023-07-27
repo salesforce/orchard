@@ -26,28 +26,25 @@ class OrchardSystemService @Inject() (
   conf: Configuration
 ) {
 
-  val numRetriesAndTimeRange = for {
-    n <- conf.getOptional[Int]("orchard.system.restart-num-of-retries")
-    t <- conf.getOptional[Long]("orchard.system.restart-time-range")
-  } yield (n, t)
+  val restartBackoffParams = for {
+    a <- conf.getOptional[Int]("orchard.system.restart-min-backoff-seconds")
+    b <- conf.getOptional[Int]("orchard.system.restart-max-backoff-seconds")
+    j <- conf.getOptional[Double]("orchard.system.restart-jitter-probability")
+  } yield (a, b, j)
 
   private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] =
-    if (numRetriesAndTimeRange.isEmpty) {
+    if (restartBackoffParams.isEmpty) {
       Behaviors
         .supervise(OrchardSystem.apply(databaseService.orchardDB))
         .onFailure(
           SupervisorStrategy.restart
         )
     } else {
-      val (restartMaxNrOfRetries, restartTimeRange) = numRetriesAndTimeRange.get
+      val (minBackoff, maxBackoff, jitter) = restartBackoffParams.get
       Behaviors
         .supervise(OrchardSystem.apply(databaseService.orchardDB))
         .onFailure(
-          SupervisorStrategy.restart
-            .withLimit(
-              maxNrOfRetries = restartMaxNrOfRetries,
-              withinTimeRange = restartTimeRange.seconds
-            )
+          SupervisorStrategy.restartWithBackoff(minBackoff.seconds, maxBackoff.seconds, jitter)
         )
     }
 
