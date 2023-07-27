@@ -29,8 +29,8 @@ class Authorization(private var authorizationSettings: AuthorizationSettings) {
 
   private def getKeyRoles(key: Option[String]) = {
     key match {
-      case Some(x) => authorizationSettings.keyRoles.getOrElse(convertToSha256(x), List.empty)
-      case None => List.empty
+      case Some(x) => authorizationSettings.keyRoles.getOrElse(convertToSha256(x), Nil)
+      case None => Nil
     }
   }
 

@@ -97,4 +97,9 @@ object WorkflowQuery {
   def filterByStatus(status: Status.Value): DBIO[Seq[WorkflowTable.R]] =
     WorkflowTable().filter(r => r.status === status).result
 
+  def countByStatus(): DBIO[Seq[(Status.Value, Int)]] = WorkflowTable()
+    .groupBy(_.status)
+    .map { case (sts, rs) => sts -> rs.length }
+    .result
+
 }

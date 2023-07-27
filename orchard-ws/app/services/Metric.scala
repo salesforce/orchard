@@ -13,11 +13,11 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 import com.typesafe.config.ConfigFactory
-import play.api.Configuration
-import play.api.mvc.RequestHeader
 import io.prometheus.client._
 import io.prometheus.client.exporter.common.TextFormat
 import io.prometheus.client.hotspot.DefaultExports
+import play.api.Configuration
+import play.api.mvc.RequestHeader
 
 trait Metric {
   private lazy val config = new Configuration(ConfigFactory.load())
