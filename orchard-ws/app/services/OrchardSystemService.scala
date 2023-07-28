@@ -26,27 +26,24 @@ class OrchardSystemService @Inject() (
   conf: Configuration
 ) {
 
-  val restartBackoffParams = for {
+  private val restartBackoffParams = for {
     a <- conf.getOptional[Int]("orchard.system.restart-min-backoff-seconds")
     b <- conf.getOptional[Int]("orchard.system.restart-max-backoff-seconds")
     j <- conf.getOptional[Double]("orchard.system.restart-jitter-probability")
   } yield (a, b, j)
 
-  private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] =
-    if (restartBackoffParams.isEmpty) {
-      Behaviors
-        .supervise(OrchardSystem.apply(databaseService.orchardDB))
-        .onFailure(
-          SupervisorStrategy.restart
-        )
-    } else {
-      val (minBackoff, maxBackoff, jitter) = restartBackoffParams.get
+  private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] = restartBackoffParams match {
+    case Some((minBackoff, maxBackoff, jitter)) =>
       Behaviors
         .supervise(OrchardSystem.apply(databaseService.orchardDB))
         .onFailure(
           SupervisorStrategy.restartWithBackoff(minBackoff.seconds, maxBackoff.seconds, jitter)
         )
-    }
+    case _ =>
+      Behaviors
+        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .onFailure(SupervisorStrategy.restart)
+  }
 
   val orchard: ActorRef[OrchardSystem.Msg] =
     actorSystem.spawn(supervisedOrchardSystem, "orchard-system")
