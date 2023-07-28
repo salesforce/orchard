@@ -17,16 +17,15 @@ import play.api.mvc.{ActionBuilder, ActionTransformer, AnyContent, BodyParsers, 
 class AuthTransformAction @Inject() (val parser: BodyParsers.Default, auth: Authorization)(implicit
   val executionContext: ExecutionContext
 ) extends ActionBuilder[ApiRequest, AnyContent] with ActionTransformer[Request, ApiRequest]
-  with Logging {
+    with Logging {
 
   override def transform[A](request: Request[A]) =
     Future.successful {
       auth.getRoles(request) match {
         case Nil =>
-          logger.debug(s"transform not found x-api-key")
+          logger.debug("auth header does not exist")
           InvalidApiRequest(request)
         case x =>
-          logger.debug(s"transform found x-api-key $x")
           if (x.contains(Authorization.Admin)) {
             ValidApiRequest(Authorization.Admin, request)
           } else if (x.contains(Authorization.User)) {
