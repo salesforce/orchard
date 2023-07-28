@@ -1,6 +1,6 @@
 val slickVersion = "3.4.1"
 // make sure this is the same as the playWS's dependency
-val akkaVersion = "2.6.20"
+val akkaVersion = "2.6.21"
 val playJsonVersion = "2.9.4"
 val awsVersion = "2.20.+"
 val stubbornVersion = "3.1.0"
@@ -18,9 +18,9 @@ val playJson          = "com.typesafe.play"       %% "play-json"                
 val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
 
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.15" % Test
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.16" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.6"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.8"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -29,7 +29,7 @@ val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"   
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  scalaVersion := "2.13.10",
+  scalaVersion := "2.13.11",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(

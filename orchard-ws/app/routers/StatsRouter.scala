@@ -16,7 +16,7 @@ import play.api.routing.sird._
 class StatsRouter @Inject() (ctrl: StatsController) extends SimpleRouter {
 
   override def routes: Router.Routes = {
-    case GET(p"/counts") => ctrl.count()
+    case GET(p"/counts" ? q_o"days=${int(days)}") => ctrl.count(days)
   }
 
 }
