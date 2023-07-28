@@ -14,24 +14,28 @@ import com.salesforce.mce.orchard.model.{ActionCondition, ActionStatus, Status}
 
 package object db {
 
-  implicit val StatusStringConvert = MappedColumnType.base[Status.Value, String](
-    { status => status.toString() },
-    { statusStr => Status.withName(statusStr) }
-  )
+  implicit val StatusStringConvert: BaseColumnType[Status.Value] =
+    MappedColumnType.base[Status.Value, String](
+      { status => status.toString() },
+      { statusStr => Status.withName(statusStr) }
+    )
 
-  implicit val ActionStatusStringConvert = MappedColumnType.base[ActionStatus, String](
-    { status => status.Serialized },
-    { statusStr => ActionStatus(statusStr) }
-  )
+  implicit val ActionStatusStringConvert: BaseColumnType[ActionStatus] =
+    MappedColumnType.base[ActionStatus, String](
+      { status => status.Serialized },
+      { statusStr => ActionStatus(statusStr) }
+    )
 
-  implicit val ActionConditionStringConvert = MappedColumnType.base[ActionCondition, String](
-    { status => status.Serialized },
-    { statusStr => ActionCondition(statusStr) }
-  )
+  implicit val ActionConditionStringConvert: BaseColumnType[ActionCondition] =
+    MappedColumnType.base[ActionCondition, String](
+      { status => status.Serialized },
+      { statusStr => ActionCondition(statusStr) }
+    )
 
-  implicit val JsValueStringConvert = MappedColumnType.base[JsValue, String](
-    { jsValue => Json.stringify(jsValue) },
-    { jsStr => Json.parse(jsStr) }
-  )
+  implicit val JsValueStringConvert: BaseColumnType[JsValue] =
+    MappedColumnType.base[JsValue, String](
+      { jsValue => Json.stringify(jsValue) },
+      { jsStr => Json.parse(jsStr) }
+    )
 
 }

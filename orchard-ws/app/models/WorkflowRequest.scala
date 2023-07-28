@@ -47,12 +47,12 @@ object WorkflowRequest {
     actionSpec: JsValue
   )
 
-  implicit val activityReads = Json.reads[Activity]
+  implicit val activityReads: Reads[Activity] = Json.reads[Activity]
 
-  implicit val resourceReads = Json.reads[Resource]
+  implicit val resourceReads: Reads[Resource] = Json.reads[Resource]
 
-  implicit val actionReads = Json.reads[Action]
+  implicit val actionReads: Reads[Action] = Json.reads[Action]
 
-  implicit val workflowRequestReads = Json.reads[WorkflowRequest]
+  implicit val workflowRequestReads: Reads[WorkflowRequest] = Json.reads[WorkflowRequest]
 
 }

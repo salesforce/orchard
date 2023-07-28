@@ -8,7 +8,8 @@
 package models
 
 import java.time.LocalDateTime
-import play.api.libs.json.Json
+
+import play.api.libs.json.{Json, Writes, Reads}
 
 case class WorkflowResponse(
   id: String,
@@ -20,6 +21,6 @@ case class WorkflowResponse(
 )
 
 object WorkflowResponse {
-  implicit val reads = Json.reads[WorkflowResponse]
-  implicit val writes = Json.writes[WorkflowResponse]
+  implicit val reads: Reads[WorkflowResponse] = Json.reads[WorkflowResponse]
+  implicit val writes: Writes[WorkflowResponse] = Json.writes[WorkflowResponse]
 }
