@@ -15,18 +15,48 @@ import akka.stream.Materializer
 import play.api.mvc.{Filter, RequestHeader, Result}
 
 import services.Metric
+import play.api.Configuration
 
 class MetricFilter @Inject() (
-  metric: Metric
+  metric: Metric,
+  conf: Configuration
 )(implicit
   val mat: Materializer,
   ec: ExecutionContext
 ) extends Filter {
 
+  private def checkPathIsDisabled(path: String): Boolean = bypassPaths.contains(path)
+
+  private val bypassPaths = conf.getOptional[Seq[String]]("orchard.metrics.bypass.paths") match {
+    case Some(paths) => paths.toSet
+    case _ => Set[String]()
+  }
+
+  private val enableMetrics = conf.getOptional[Boolean]("orchard.metrics.enable").getOrElse(false)
+
+  private val staticPathMarkers = Seq("instance", "__metrics", "__status")
+
+  private def parseRequest(request: RequestHeader): Option[(String, String)] = {
+    if (checkPathIsDisabled(request.path) || !enableMetrics)
+      None
+    else {
+      val (staticPath, args) = request.path
+        .split("/")
+        .filter(_.nonEmpty)
+        .foldLeft((List[String](), List[String]())) {
+          case ((Nil, l2), token) => (List(token), l2)
+          case ((h :: t, l2), token) =>
+            if (staticPathMarkers.contains(h)) (h :: t, token :: l2)
+            else (token :: h :: t, l2)
+        }
+      Some((staticPath.reverse.mkString("-"), args.reverse.mkString("-")))
+    }
+  }
+
   def apply(
     nextFilter: RequestHeader => Future[Result]
   )(requestHeader: RequestHeader): Future[Result] = {
-    metric.parseRequest(requestHeader) match {
+    parseRequest(requestHeader) match {
       case Some((staticPath, argument)) =>
         val stopTimerCallback = metric.startApiTimer(staticPath, argument, requestHeader.method)
 
