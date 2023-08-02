@@ -113,6 +113,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
           )((r, uri) => r.logUri(uri))
           .build()
       )
+
     logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }
@@ -182,11 +183,11 @@ object EmrResource {
     instanceType: String,
     instanceBidPrice: Option[String]
   )
-  implicit val instanceGroupConfigReads: Reads[InstanceGroupConfig] = Json.reads[InstanceGroupConfig]
+  implicit val instanceGroupConfigReads: Reads[InstanceGroupConfig] =
+    Json.reads[InstanceGroupConfig]
 
   case class InstancesConfig(
     subnetId: String,
-    instanceCount: Int,
     ec2KeyName: Option[String],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
     additionalMasterSecurityGroups: Option[Seq[String]],
