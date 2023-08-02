@@ -235,7 +235,7 @@ object EmrResource {
     tags: Option[Seq[AwsTag]],
     bootstrapActions: Option[Seq[BootstrapAction]],
     configurations: Option[Seq[ConfigurationSpec]],
-    workflowName: Option[String],
+    name: Option[String],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -243,7 +243,7 @@ object EmrResource {
   def decode(conf: ResourceIO.Conf): JsResult[EmrResource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${spec.workflowName.fold("")(s => s"${s}_")}${conf.instanceId}"
+      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${spec.name.getOrElse("Emr")}_${conf.instanceId}"
       EmrResource.apply(name, spec)
     }
 
