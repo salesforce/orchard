@@ -22,7 +22,7 @@ import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
+case class Ec2Resource(spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -64,6 +64,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
             .build()
         )
     }
+
     val resp = client.runInstances(builder.build())
     client.close()
     if (logger.isDebugEnabled) {
@@ -240,7 +241,7 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}", spec)
+      Ec2Resource.apply(spec)
     }
 
 }
