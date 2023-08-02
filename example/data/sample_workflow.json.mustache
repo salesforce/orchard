@@ -13,10 +13,19 @@
                 "instancesConfig": {
                     "subnetId": "{{resources.subnetId}}",
                     "ec2KeyName": "orchard",
-                    "instanceCount": 2,
-                    "masterInstanceType": "m5.xlarge",
-                    "slaveInstanceType": "m5.xlarge"
-                },
+                    "instanceGroupConfigs": [
+                        {
+                            "instanceRoleType": "MASTER",
+                            "instanceCount": 1,
+                            "instanceType": "m5.xlarge"
+                        },
+                        {
+                            "instanceRoleType": "CORE",
+                            "instanceCount": 1,
+                            "instanceType": "m5.xlarge"
+                        }
+                    ]
+                }
                 "sparkConfigs": [
                     {
                         "classification": "spark",
@@ -90,10 +99,22 @@
                 ]
             },
             "resourceId": "1",
+            "onFailure": ["1"],
             "maxAttempt": 3
         }
     ],
-    "actions": [],
+    "actions": [
+        {
+            "id": "1",
+            "name": "action 1",
+            "actionType": "aws.action.SnsAction",
+            "actionSpec": {
+                "topicArn": "{{snsArn}}",
+                "subject": "hi - subject",
+                "message": "hi - message"
+            }
+        }
+    ],
     "dependencies": {
         "2": ["1"]
     }

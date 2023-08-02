@@ -91,7 +91,8 @@ For example, you can create a file `example/data/sample_workflow_view.json` to d
   "sparkConfig": {
     "env_key": "REGION_ENV_KEY",
     "env_val": "uswest-cloud-trust"
-  }
+  },
+  "snsArn": "your-sns-arn-for-action"
 }
 ```
 
