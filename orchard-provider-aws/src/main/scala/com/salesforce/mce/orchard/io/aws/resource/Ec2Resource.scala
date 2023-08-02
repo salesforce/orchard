@@ -173,6 +173,7 @@ object Ec2Resource {
     instanceProfile: String,
     securityGroups: Option[Seq[String]],
     tags: Option[Seq[AwsTag]],
+    workflowName: Option[String],
     spotInstance: Boolean
   )
 
@@ -181,7 +182,8 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}", spec)
+      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${spec.workflowName.fold("")(s => s"${s}_")}${conf.instanceId}"
+      Ec2Resource.apply(name, spec)
     }
 
 }
