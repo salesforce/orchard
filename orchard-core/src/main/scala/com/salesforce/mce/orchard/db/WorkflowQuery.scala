@@ -97,4 +97,15 @@ object WorkflowQuery {
   def filterByStatus(status: Status.Value): DBIO[Seq[WorkflowTable.R]] =
     WorkflowTable().filter(r => r.status === status).result
 
+  def countByStatus(window: Int): DBIO[Seq[(Status.Value, Int)]] = {
+
+    val fromDate = LocalDateTime.now().minusDays(window)
+
+    WorkflowTable()
+      .filter(_.createdAt >= fromDate)
+      .groupBy(_.status)
+      .map { case (sts, rs) => sts -> rs.length }
+      .result
+  }
+
 }

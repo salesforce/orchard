@@ -12,7 +12,7 @@ import javax.inject._
 import scala.concurrent.{ExecutionContext, Future}
 
 import play.api.Logging
-import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
+import play.api.libs.json.{JsError, JsString, JsValue, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
@@ -21,13 +21,13 @@ import com.salesforce.mce.orchard.system.OrchardSystem
 
 import models.{WorkflowRequest, WorkflowResponse}
 import services.{DatabaseService, OrchardSystemService}
-import utils.{AuthTransformAction, InvalidApiRequest, ValidApiRequest}
+import utils.UserAction
 
 @Singleton
 class WorkflowController @Inject() (
   cc: ControllerComponents,
   db: DatabaseService,
-  authAction: AuthTransformAction,
+  userAction: UserAction,
   orchardSystemService: OrchardSystemService
 )(implicit ec: ExecutionContext)
     extends AbstractController(cc) with Logging {
@@ -72,7 +72,7 @@ class WorkflowController @Inject() (
     )
   }
 
-  private def validateResources(request: WorkflowRequest): Either[String, WorkflowRequest] = {
+  private def validatePayload(request: WorkflowRequest): Either[String, WorkflowRequest] = {
 
     val invalidTerminateAt =
       for {
@@ -87,53 +87,59 @@ class WorkflowController @Inject() (
         if resource.maxAttempt <= 0 || resource.maxAttempt > 100
       } yield resource.maxAttempt
 
+    val definedResIds = request.resources.map(_.id)
+    val invalidResourceDefined = for {
+      referredId <- request.activities.map(_.resourceId)
+      if !definedResIds.contains(referredId)
+    } yield referredId
+
+    val definedActIds = request.activities.map(_.id)
+    val invalidActDependencies = for {
+      (src, dest) <- request.dependencies
+      if !(definedActIds.contains(src) && dest.toSet.subsetOf(definedActIds.toSet))
+    } yield (src, dest)
+
     if (invalidTerminateAt.nonEmpty) {
       Left("Invalid terminateAt value, must be a value within (0, 24 * 30].")
     } else if (invalidMaxAttempts.nonEmpty) {
       Left("Invalid maxAttempt value, must be a value greater than 0.")
+    } else if (invalidResourceDefined.nonEmpty) {
+      Left("Workflow activities refers to undefined resource id.")
+    } else if (invalidActDependencies.nonEmpty) {
+      Left("Workflow dependencies refer to undefined activity.")
     } else {
       Right(request)
     }
   }
 
-  def post() = authAction.async(parse.json) { request =>
-    request match {
-      case ValidApiRequest(apiRole, req) =>
-        req.body
-          .validate[WorkflowRequest]
-          .fold(
-            e => {
-              val errorJson = JsError.toJson(e)
-              Future.successful(BadRequest(errorJson))
-            },
-            workflowReq => {
-              validateResources(workflowReq)
-                .fold(
-                  e =>
-                    Future.successful(BadRequest(JsString(e))),
-                  req =>
-                    processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
-                )
-            }
-          )
-      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
-    }
+  def post() = userAction.async(parse.json) {
+    _.body
+      .validate[WorkflowRequest]
+      .fold(
+        e => {
+          val errorJson = JsError.toJson(e)
+          Future.successful(BadRequest(errorJson))
+        },
+        workflowReq => {
+          validatePayload(workflowReq)
+            .fold(
+              e => Future.successful(BadRequest(JsString(e))),
+              req => processWorkflowRequest(req).map(workflowId => Ok(JsString(workflowId)))
+            )
+        }
+      )
   }
 
-  def activate(id: String) = authAction.async { request =>
-    request match {
-      case ValidApiRequest(apiRole, req) =>
-        db.orchardDB
-          .async(new WorkflowQuery(id).activate())
-          .map {
-            case 0 =>
-              NotFound(JsString("does not exists"))
-            case _ =>
-              orchardSystemService.orchard ! OrchardSystem.ActivateMsg(id)
-              Ok(JsString(id))
-          }
-      case InvalidApiRequest(_) => Future.successful(Results.Unauthorized(JsNull))
-    }
+  def activate(id: String) = userAction.async {
+    db.orchardDB
+      .async(new WorkflowQuery(id).activate())
+      .map {
+        case 0 =>
+          NotFound(JsString("does not exists"))
+        case _ =>
+          orchardSystemService.orchard ! OrchardSystem.ActivateMsg(id)
+          Ok(JsString(id))
+      }
   }
 
   private def toResponse(r: WorkflowTable.R): JsValue = Json.toJson(
@@ -153,49 +159,40 @@ class WorkflowController @Inject() (
     order: Option[String],
     page: Option[Int],
     perPage: Option[Int]
-  ) = authAction.async {
-    case ValidApiRequest(apiRole, req) =>
-      val validated = for {
-        vOrderBy <- WorkflowController.validateOrderBy(orderBy)
-        vOrder <- WorkflowController.validateOrder(order)
-        vPage <- WorkflowController.validateOne(page.getOrElse(1), "page")
-        limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
-      } yield (vOrderBy, vOrder, limit, (vPage - 1) * limit)
+  ) = userAction.async {
+    val validated = for {
+      vOrderBy <- WorkflowController.validateOrderBy(orderBy)
+      vOrder <- WorkflowController.validateOrder(order)
+      vPage <- WorkflowController.validateOne(page.getOrElse(1), "page")
+      limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
+    } yield (vOrderBy, vOrder, limit, (vPage - 1) * limit)
 
-      validated match {
-        case Right((by, ord, limit, offset)) =>
-          db.orchardDB
-            .async(WorkflowQuery.filter(like, by, ord, limit, offset))
-            .map(rs => Ok(Json.toJson(rs.map(toResponse))))
-        case Left(msg) =>
-          Future.successful(BadRequest(JsString(msg)))
+    validated match {
+      case Right((by, ord, limit, offset)) =>
+        db.orchardDB
+          .async(WorkflowQuery.filter(like, by, ord, limit, offset))
+          .map(rs => Ok(Json.toJson(rs.map(toResponse))))
+      case Left(msg) =>
+        Future.successful(BadRequest(JsString(msg)))
+    }
+  }
+
+  def delete(workflowId: String) = userAction.async {
+    db.orchardDB
+      .async(new WorkflowQuery(workflowId).deletePending())
+      .map { r =>
+        if (r >= 1) Ok(Json.toJson(r))
+        else NotFound(Json.toJson(s"Pending workflow ${workflowId} does not exist"))
       }
-    case InvalidApiRequest(_) =>
-      Future.successful(Results.Unauthorized(JsNull))
   }
 
-  def delete(workflowId: String) = authAction.async {
-    case ValidApiRequest(apiRole, req) =>
-      db.orchardDB
-        .async(new WorkflowQuery(workflowId).deletePending())
-        .map { r =>
-          if (r >= 1) Ok(Json.toJson(r))
-          else NotFound(Json.toJson(s"Pending workflow ${workflowId} does not exist"))
-        }
-    case InvalidApiRequest(_) =>
-      Future.successful(Results.Unauthorized(JsNull))
-  }
-
-  def cancel(workflowId: String) = authAction.async {
-    case ValidApiRequest(apiRole, req) =>
-      db.orchardDB
-        .async(new WorkflowQuery(workflowId).setCanceling())
-        .map { r =>
-          if (r >= 1) Ok(Json.toJson(r))
-          else NotFound(Json.toJson(s"Running workflow ${workflowId} does not exist"))
-        }
-    case InvalidApiRequest(_) =>
-      Future.successful(Results.Unauthorized(JsNull))
+  def cancel(workflowId: String) = userAction.async {
+    db.orchardDB
+      .async(new WorkflowQuery(workflowId).setCanceling())
+      .map { r =>
+        if (r >= 1) Ok(Json.toJson(r))
+        else NotFound(Json.toJson(s"Running workflow ${workflowId} does not exist"))
+      }
   }
 
 }

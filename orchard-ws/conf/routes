@@ -24,6 +24,7 @@ PUT     /v1/workflow/:id            controllers.WorkflowController.activate(id: 
 DELETE  /v1/workflow/:id            controllers.WorkflowController.delete(id: String)
 
 ->      /v1/workflows               routers.WorkflowsRouter
+->      /v1/stats                   routers.StatsRouter
 
 GET     /__status                   controllers.StatusController.status()
 GET     /__metrics                  controllers.MetricController.collect()

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   ws:
-    image: realstraw/sbt
+    image: realstraw/sbt:jdk11
     working_dir: /orchard/ws
     volumes:
       - ./:/orchard/ws
@@ -13,10 +13,14 @@ services:
       AWS_REGION: "${ORCHARD_AWS_REGION}"
       ORCHARD_AWS_LOGGING_URI: "${ORCHARD_AWS_LOGGING_URI}"
       ORCHARD_PG_SECRET: "${ORCHARD_PG_SECRET}"
+      # set JVM_OPTS since realstraw/sbt:jdk11 is using GraalVM
+      JVM_OPTS: "-XX:+UnlockExperimentalVMOptions -XX:-UseJVMCICompiler"
     ports:
       - 9001:9000
-    command:
-      sbt orchardWS/run
+    # use tty instead of command for easier debugging
+    tty: true
+        # command:
+        #   sbt orchardWS/run
   db:
     image: postgres
     volumes:

@@ -9,13 +9,42 @@ package services
 
 import javax.inject._
 
+import scala.concurrent.duration._
+
 import akka.actor.ActorSystem
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
+import play.api.Configuration
 
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 @Singleton
-class OrchardSystemService @Inject() (actorSystem: ActorSystem, databaseService: DatabaseService) {
-  val orchard =
-    actorSystem.spawn(OrchardSystem.apply(databaseService.orchardDB), "orchard-system")
+class OrchardSystemService @Inject() (
+  actorSystem: ActorSystem,
+  databaseService: DatabaseService,
+  conf: Configuration
+) {
+
+  private val restartBackoffParams = for {
+    a <- conf.getOptional[Int]("orchard.system.restart-min-backoff-seconds")
+    b <- conf.getOptional[Int]("orchard.system.restart-max-backoff-seconds")
+    j <- conf.getOptional[Double]("orchard.system.restart-jitter-probability")
+  } yield (a, b, j)
+
+  private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] = restartBackoffParams match {
+    case Some((minBackoff, maxBackoff, jitter)) =>
+      Behaviors
+        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .onFailure(
+          SupervisorStrategy.restartWithBackoff(minBackoff.seconds, maxBackoff.seconds, jitter)
+        )
+    case _ =>
+      Behaviors
+        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .onFailure(SupervisorStrategy.restart)
+  }
+
+  val orchard: ActorRef[OrchardSystem.Msg] =
+    actorSystem.spawn(supervisedOrchardSystem, "orchard-system")
 }

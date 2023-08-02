@@ -9,7 +9,7 @@ package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters._
 
-import play.api.libs.json.{JsResult, JsValue, Json}
+import play.api.libs.json.{JsResult, JsValue, Json, Reads}
 import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.ActivityIO
@@ -105,7 +105,7 @@ object EmrActivity {
     args = step.args.map(ActivityContext.replace(_, ctx))
   )
 
-  implicit val stepReads = Json.reads[Step]
+  implicit val stepReads: Reads[Step] = Json.reads[Step]
 
   def decode(conf: ActivityIO.Conf): JsResult[EmrActivity] = {
     for {
