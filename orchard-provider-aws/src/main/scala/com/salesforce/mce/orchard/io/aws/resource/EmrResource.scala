@@ -243,7 +243,7 @@ object EmrResource {
   def decode(conf: ResourceIO.Conf): JsResult[EmrResource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${spec.name.getOrElse("Emr")}_${conf.instanceId}"
+      val name = spec.name.getOrElse(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}")
       EmrResource.apply(name, spec)
     }
 

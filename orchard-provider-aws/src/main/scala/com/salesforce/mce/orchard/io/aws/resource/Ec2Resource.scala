@@ -50,20 +50,24 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
       )
     }
-    spec.tags match {
+    val tags = spec.tags match {
       case None =>
         logger.debug(s"no tags given")
+        Seq.empty[Tag]
       case Some(ts) =>
         logger.debug(s"spec.tags=${spec.tags}")
-        val tags2 = ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
-        builder.tagSpecifications(
-          TagSpecification
-            .builder()
-            .resourceType(ResourceType.INSTANCE)
-            .tags(tags2: _*)
-            .build()
-        )
+        ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
     }
+    val fullTags = Tag.builder().key("name").value(name).build() +: tags
+
+    builder.tagSpecifications(
+      TagSpecification
+        .builder()
+        .resourceType(ResourceType.INSTANCE)
+        .tags(fullTags: _*)
+        .build()
+    )
+
     val resp = client.runInstances(builder.build())
     client.close()
     if (logger.isDebugEnabled) {
@@ -241,7 +245,7 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${spec.name.getOrElse("Ec2")}_${conf.instanceId}"
+      val name = spec.name.getOrElse(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}")
       Ec2Resource.apply(name, spec)
     }
 
