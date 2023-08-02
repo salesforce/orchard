@@ -22,7 +22,7 @@ import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
+case class Ec2Resource(spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -50,23 +50,20 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
       )
     }
-    val tags = spec.tags match {
+    spec.tags match {
       case None =>
         logger.debug(s"no tags given")
-        Seq.empty[Tag]
       case Some(ts) =>
         logger.debug(s"spec.tags=${spec.tags}")
-        ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+        val tags2 = ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+        builder.tagSpecifications(
+          TagSpecification
+            .builder()
+            .resourceType(ResourceType.INSTANCE)
+            .tags(tags2: _*)
+            .build()
+        )
     }
-    val fullTags = Tag.builder().key("name").value(name).build() +: tags
-
-    builder.tagSpecifications(
-      TagSpecification
-        .builder()
-        .resourceType(ResourceType.INSTANCE)
-        .tags(fullTags: _*)
-        .build()
-    )
 
     val resp = client.runInstances(builder.build())
     client.close()
@@ -236,7 +233,6 @@ object Ec2Resource {
     instanceProfile: String,
     securityGroups: Option[Seq[String]],
     tags: Option[Seq[AwsTag]],
-    name: Option[String],
     spotInstance: Boolean
   )
 
@@ -245,8 +241,7 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = spec.name.getOrElse(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}")
-      Ec2Resource.apply(name, spec)
+      Ec2Resource.apply(spec)
     }
 
 }
