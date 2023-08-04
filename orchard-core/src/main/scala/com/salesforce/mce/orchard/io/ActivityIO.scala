@@ -26,6 +26,7 @@ object ActivityIO {
   case class Conf(
     workflowId: String,
     activityId: String,
+    activityName: String,
     attemptId: Int,
     activityType: String,
     activitySpec: JsValue,

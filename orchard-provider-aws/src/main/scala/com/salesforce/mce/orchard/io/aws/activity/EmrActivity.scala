@@ -114,7 +114,7 @@ object EmrActivity {
         .map(_.map(applyContext(_, conf)))
       clusterId <- (conf.resourceInstSpec \ "clusterId").validate[String]
     } yield {
-      EmrActivity(s"${conf.workflowId}_act-${conf.activityId}_${conf.attemptId}", steps, clusterId)
+      EmrActivity(conf.activityName, steps, clusterId)
     }
   }
 
