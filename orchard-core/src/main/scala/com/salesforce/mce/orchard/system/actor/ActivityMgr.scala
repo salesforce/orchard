@@ -111,7 +111,7 @@ object ActivityMgr {
               ps.database,
               ps.workflowId,
               ps.activityId,
-              ps.activityId,
+              ps.activityName,
               attmptId,
               ps.activityType,
               ps.activitySpec,
