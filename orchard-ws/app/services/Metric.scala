@@ -12,46 +12,11 @@ import javax.inject.{Inject, Singleton}
 
 import scala.concurrent.{ExecutionContext, Future}
 
-import com.typesafe.config.ConfigFactory
 import io.prometheus.client._
 import io.prometheus.client.exporter.common.TextFormat
 import io.prometheus.client.hotspot.DefaultExports
-import play.api.Configuration
-import play.api.mvc.RequestHeader
 
 trait Metric {
-  private lazy val config = new Configuration(ConfigFactory.load())
-
-  private val enableMetrics =
-    config.getOptional[Boolean]("orchard.metrics.enable").getOrElse(false)
-
-  private val bypassPaths = config.getOptional[Seq[String]]("orchard.metrics.bypass.paths") match {
-    case Some(paths) => paths.toSet
-    case _ => Set[String]()
-  }
-
-  private val staticPathMarkers = Seq("instance", "__metrics", "__status")
-
-  def parseRequest(request: RequestHeader): Option[(String, String)] = {
-    if (checkPathIsDisabled(request.path) || !checkMetricIsEnabled)
-      None
-    else {
-      val (staticPath, args) = request.path
-        .split("/")
-        .filter(_.nonEmpty)
-        .foldLeft((List[String](), List[String]())) {
-          case ((Nil, l2), token) => (List(token), l2)
-          case ((h :: t, l2), token) =>
-            if (staticPathMarkers.contains(h)) (h :: t, token :: l2)
-            else (token :: h :: t, l2)
-        }
-      Some((staticPath.reverse.mkString("-"), args.reverse.mkString("-")))
-    }
-  }
-
-  def checkMetricIsEnabled: Boolean = { enableMetrics }
-
-  def checkPathIsDisabled(path: String): Boolean = { bypassPaths.contains(path) }
 
   def incrementStatusCount(status: String): Unit
 
