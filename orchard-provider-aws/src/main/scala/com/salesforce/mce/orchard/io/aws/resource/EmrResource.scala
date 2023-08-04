@@ -45,6 +45,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       case Some(bas) => bas
     }
 
+    val displayName = spec.name.getOrElse(name)
     val response = Client
       .emr()
       .runJobFlow(
@@ -52,7 +53,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
           .foldLeft(
             RunJobFlowRequest
               .builder()
-              .name(name)
+              .name(displayName)
               .releaseLabel(releaseLabel)
               .applications(applications: _*)
               .serviceRole(spec.serviceRole)
@@ -114,7 +115,6 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
           .build()
       )
 
-    logger.debug(s"create: name=$name jobFlowId=${response.jobFlowId()}")
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }
 
@@ -243,7 +243,7 @@ object EmrResource {
   def decode(conf: ResourceIO.Conf): JsResult[EmrResource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = spec.name.getOrElse(s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}")
+      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}"
       EmrResource.apply(name, spec)
     }
 
