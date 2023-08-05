@@ -22,7 +22,7 @@ import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(spec: Ec2Resource.Spec) extends ResourceIO {
+case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -55,7 +55,8 @@ case class Ec2Resource(spec: Ec2Resource.Spec) extends ResourceIO {
         logger.debug(s"no tags given")
       case Some(ts) =>
         logger.debug(s"spec.tags=${spec.tags}")
-        val tags2 = ts.map(tag => Tag.builder().key(tag.key).value(tag.value).build())
+        val distTags = ts.map(tag => (tag.key, tag.value)).toMap ++ Map("Name" -> name)
+        val tags2 = distTags.toSeq.map { case (k, v) => Tag.builder().key(k).value(v).build() }
         builder.tagSpecifications(
           TagSpecification
             .builder()
@@ -241,7 +242,7 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(spec)
+      Ec2Resource.apply(conf.resourceName, spec)
     }
 
 }

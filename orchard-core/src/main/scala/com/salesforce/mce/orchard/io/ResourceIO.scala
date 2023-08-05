@@ -26,6 +26,7 @@ object ResourceIO {
   case class Conf(
     workflowId: String,
     resourceId: String,
+    resourceName: String,
     instanceId: Int,
     resourceType: String,
     resourceSpec: JsValue

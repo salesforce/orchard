@@ -21,14 +21,14 @@ import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO {
+case class EmrResource(name: String, loggingPath: String, spec: EmrResource.Spec) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val releaseLabel = spec.releaseLabel
   private val instancesConfig = spec.instancesConfig
   private val applications = spec.applications.map(a => Application.builder().name(a).build())
 
-  val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$name/")
+  val loggingUriBase = ProviderSettings().loggingUri.map(p => s"$p$loggingPath/")
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
     val awsTags = spec.tags match {
@@ -45,7 +45,6 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
       case Some(bas) => bas
     }
 
-    val displayName = spec.name.getOrElse(name)
     val response = Client
       .emr()
       .runJobFlow(
@@ -53,7 +52,7 @@ case class EmrResource(name: String, spec: EmrResource.Spec) extends ResourceIO 
           .foldLeft(
             RunJobFlowRequest
               .builder()
-              .name(displayName)
+              .name(name)
               .releaseLabel(releaseLabel)
               .applications(applications: _*)
               .serviceRole(spec.serviceRole)
@@ -235,7 +234,6 @@ object EmrResource {
     tags: Option[Seq[AwsTag]],
     bootstrapActions: Option[Seq[BootstrapAction]],
     configurations: Option[Seq[ConfigurationSpec]],
-    name: Option[String],
     instancesConfig: InstancesConfig
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -243,8 +241,8 @@ object EmrResource {
   def decode(conf: ResourceIO.Conf): JsResult[EmrResource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      val name = s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}"
-      EmrResource.apply(name, spec)
+      val loggingPath = s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}"
+      EmrResource.apply(conf.resourceName, loggingPath, spec)
     }
 
 }
