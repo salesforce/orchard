@@ -68,7 +68,7 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
     } else if (statuses.contains(StepState.FAILED)) {
       Status.Failed
     } else if (statuses.contains(StepState.CANCELLED)) {
-      Status.Canceled
+      Status.Failed
     } else {
       Status.Running
     }
