@@ -68,6 +68,7 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
     } else if (statuses.contains(StepState.FAILED)) {
       Status.Failed
     } else if (statuses.contains(StepState.CANCELLED)) {
+      // when EMR cluster terminate with error, the StepState is CANCELLED, return Fail so new attempts could be made
       Status.Failed
     } else {
       Status.Running
