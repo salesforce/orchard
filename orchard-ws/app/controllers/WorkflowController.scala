@@ -12,7 +12,7 @@ import javax.inject._
 import scala.concurrent.{ExecutionContext, Future}
 
 import play.api.Logging
-import play.api.libs.json.{JsError, JsString, JsValue, Json}
+import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
@@ -128,6 +128,43 @@ class WorkflowController @Inject() (
             )
         }
       )
+  }
+
+  def activities(id: String) = userAction.async {
+    db.orchardDB.async(new WorkflowQuery(id).get()).flatMap {
+      case Some(wf) =>
+        for {
+          activities <- db.orchardDB.async(new WorkflowQuery(wf.id).activities())
+        } yield {
+          Ok(
+            Json.obj(
+              "workflow" -> WorkflowResponse(
+                wf.id,
+                wf.name,
+                wf.status.toString,
+                wf.createdAt,
+                wf.activatedAt,
+                wf.terminatedAt
+              ),
+              "activities" -> activities.map { a =>
+                Json.obj(
+                  "activityId" -> a.activityId,
+                  "name" -> a.name,
+                  "activityType" -> a.activtyType,
+                  "activitySpec" -> a.activitySpec,
+                  "resourceId" -> a.resourceId,
+                  "maxAttempt" -> a.maxAttempt,
+                  "status" -> a.status,
+                  "createdAt" -> a.createdAt,
+                  "activatedAt" -> a.activatedAt,
+                  "terminatedAt" -> a.terminatedAt
+                )
+              }
+            )
+          )
+        }
+      case None => Future.successful(NotFound(JsNull))
+    }
   }
 
   def activate(id: String) = userAction.async {
