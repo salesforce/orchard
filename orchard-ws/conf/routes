@@ -14,6 +14,8 @@ GET     /assets/*file               controllers.Assets.versioned(file)
 
 POST    /v1/workflow                controllers.WorkflowController.post()
 
+GET     /v1/workflow/:id/activities controllers.WorkflowController.activities(id: String)
+
 PUT     /v1/workflow/:id/cancel     controllers.WorkflowController.cancel(id: String)
 
 PUT     /v1/workflow/:id/activate   controllers.WorkflowController.activate(id: String)

@@ -20,7 +20,7 @@ val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.16" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.8"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.11"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
