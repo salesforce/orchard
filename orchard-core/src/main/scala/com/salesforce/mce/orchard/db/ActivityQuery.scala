@@ -29,7 +29,7 @@ class ActivityQuery(workflowId: String, activityId: String) {
     .update((Status.Running, Option(LocalDateTime.now())))
 
   def setTerminated(sts: Status.Value): DBIO[Int] = self
-    .map(r => (r.status, r.activatedAt))
+    .map(r => (r.status, r.terminatedAt))
     .update((sts, Option(LocalDateTime.now())))
 
 }
