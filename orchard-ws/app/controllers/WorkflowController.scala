@@ -10,12 +10,14 @@ package controllers
 import javax.inject._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 import play.api.Logging
 import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
+import com.salesforce.mce.orchard.model
 import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Workflow}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
@@ -192,6 +194,7 @@ class WorkflowController @Inject() (
 
   def filter(
     like: String,
+    statuses: Seq[String],
     orderBy: Option[String],
     order: Option[String],
     page: Option[Int],
@@ -204,10 +207,12 @@ class WorkflowController @Inject() (
       limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
     } yield (vOrderBy, vOrder, limit, (vPage - 1) * limit)
 
+    val vStatuses = statuses.flatMap(s => Try(model.Status.withName(s)).toOption)
+
     validated match {
       case Right((by, ord, limit, offset)) =>
         db.orchardDB
-          .async(WorkflowQuery.filter(like, by, ord, limit, offset))
+          .async(WorkflowQuery.filter(like, vStatuses, by, ord, limit, offset))
           .map(rs => Ok(Json.toJson(rs.map(toResponse))))
       case Left(msg) =>
         Future.successful(BadRequest(JsString(msg)))

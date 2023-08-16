@@ -65,6 +65,7 @@ object WorkflowQuery {
 
   def filter(
     like: String,
+    statuses: Seq[Status.Value],
     orderBy: OrderBy,
     order: Order,
     limit: Int,
@@ -86,8 +87,11 @@ object WorkflowQuery {
         t: WorkflowTable => t.terminatedAt.asc
     }
 
-    WorkflowTable()
-      .filter(r => r.name.like(like) && r.status =!= Status.Deleted)
+    val base = WorkflowTable().filter(r => r.name.like(like) && r.status =!= Status.Deleted)
+
+    val query = if (statuses.isEmpty) base else base.filter(r => r.status.inSet(statuses))
+
+    query
       .sortBy(sortByColumn)
       .drop(offset)
       .take(limit)
