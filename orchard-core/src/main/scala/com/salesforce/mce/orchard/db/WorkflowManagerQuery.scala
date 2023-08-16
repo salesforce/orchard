@@ -38,6 +38,14 @@ class WorkflowManagerQuery(managerId: String) {
       .map(_.lastCheckin)
       .update(LocalDateTime.now())
 
+  def delete(workflowId: String) = WorkflowManagerTable()
+    .filter(r => r.workflowId === workflowId && r.managerId === managerId)
+    .delete
+
+}
+
+object WorkflowManagerQuery {
+
   def getOrhpanWorkflows(orphanDuration: FiniteDuration, lookback: FiniteDuration) = {
     val currentTime = LocalDateTime.now()
     val cutoff = currentTime.minus(lookback.toJava)
@@ -57,8 +65,6 @@ class WorkflowManagerQuery(managerId: String) {
       .result
   }
 
-  def delete(workflowId: String) = WorkflowManagerTable()
-    .filter(r => r.workflowId === workflowId && r.managerId === managerId)
-    .delete
+  def all() = WorkflowManagerTable().sortBy(_.lastCheckin.desc).result
 
 }

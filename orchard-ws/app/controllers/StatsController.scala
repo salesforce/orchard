@@ -29,8 +29,9 @@ class StatsController @Inject() (
     extends AbstractController(cc) with Logging {
 
   def count(days: Option[Int]) = userAction.async {
-    db.orchardDB.async(WorkflowQuery.countByStatus(days.getOrElse(365)))
-      .map{ rs =>
+    db.orchardDB
+      .async(WorkflowQuery.countByStatus(days.getOrElse(365)))
+      .map { rs =>
         Results.Ok(JsObject(rs.map { case (k, v) => k.toString() -> JsNumber(v) }))
       }
   }
