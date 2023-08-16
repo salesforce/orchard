@@ -96,14 +96,14 @@ object OrchardSystem {
       case AdoptOrphanWorkflows =>
         ctx.log.info(s"${ctx.self} Received AdoptOrphanWorkflows")
         database
-          .sync(query.getOrhpanWorkflows(5.minutes, 1.day))
+          // workflows that hasn't be checking in within the past 5 minutes
+          .sync(WorkflowManagerQuery.getOrhpanWorkflows(5.minutes, 1.day))
           .flatMap {
             case (wf, Some(wm)) =>
               if (
                 database.sync(new WorkflowManagerQuery(wm.managerId).delete(wm.workflowId)) > 0 &&
                 database.sync(query.manage(wf.id)) > 0
               ) {
-
                 Some(wf.id)
               } else {
                 None

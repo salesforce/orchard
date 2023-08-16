@@ -27,6 +27,7 @@ DELETE  /v1/workflow/:id            controllers.WorkflowController.delete(id: St
 
 ->      /v1/workflows               routers.WorkflowsRouter
 ->      /v1/stats                   routers.StatsRouter
+->      /v1/admin                   admin.Router
 
 GET     /__status                   controllers.StatusController.status()
 GET     /__metrics                  controllers.MetricController.collect()

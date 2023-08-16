@@ -22,6 +22,8 @@ import com.salesforce.mce.orchard.model.Status
 
 object ResourceInstance {
 
+  // the delay to check resource instance status during activating, running relys on activity
+  // attempts, or new activity
   val ResourceCheckDelay = 1.minute
 
   sealed trait Msg
@@ -143,6 +145,11 @@ object ResourceInstance {
         case Right(Status.Running) =>
           replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
           Behaviors.same
+        case Right(sts) =>
+          ps.ctx.log.info(
+            s"${ps.ctx.self} (running) received resource status $sts, shutting down"
+          )
+          shuttingDown(ps, instSpec, sts, Option(replyTo))
         case sts =>
           ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")
           ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
