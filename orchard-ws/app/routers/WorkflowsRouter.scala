@@ -20,12 +20,13 @@ class WorkflowsRouter @Inject() (ctlr: WorkflowController) extends SimpleRouter 
     case GET(
           p"" ?
           q"like=$like" &
+          q_s"statuses=$statuses" &
           q_o"order_by=$orderBy" &
           q_o"order=$order" &
           q_o"page=${int(page)}" &
           q_o"per_page=${int(perPage)}"
         ) =>
-      ctlr.filter(like, orderBy, order, page, perPage)
+      ctlr.filter(like, statuses, orderBy, order, page, perPage)
   }
 
 }
