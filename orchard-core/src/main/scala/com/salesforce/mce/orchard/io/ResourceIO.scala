@@ -28,6 +28,7 @@ object ResourceIO {
     resourceId: String,
     resourceName: String,
     instanceId: Int,
+    maxAttempt: Int,
     resourceType: String,
     resourceSpec: JsValue
   )
