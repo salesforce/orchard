@@ -275,7 +275,7 @@ object ResourceMgr {
     instId: Int
   ): Either[Status.Value, ActorRef[ResourceInstance.Msg]] = {
     val rscIOResult = ResourceIO(
-      ResourceIO.Conf(ps.workflowId, ps.resourceId, ps.resourceName, instId, ps.rscType, ps.rscSpec)
+      ResourceIO.Conf(ps.workflowId, ps.resourceId, ps.resourceName, instId, ps.rscType, ps.rscSpec, ps.maxAttempt)
     )
 
     rscIOResult match {

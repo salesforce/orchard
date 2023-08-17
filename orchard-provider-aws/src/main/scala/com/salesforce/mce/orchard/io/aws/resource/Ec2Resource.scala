@@ -22,7 +22,9 @@ import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO {
+case class Ec2Resource(
+  name: String, spec: Ec2Resource.Spec, instanceId: Int, maxAttempt: Int
+) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -44,7 +46,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec) extends ResourceIO 
     spec.securityGroups
       .foldLeft(builder)(_.securityGroupIds(_: _*))
 
-    if (spec.spotInstance) {
+    if (spec.spotInstance && instanceId < maxAttempt) {
       logger.debug(s"create: spotInstance=true")
       builder.instanceMarketOptions(
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
@@ -242,7 +244,7 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(conf.resourceName, spec)
+      Ec2Resource.apply(conf.resourceName, spec, conf.instanceId, conf.maxAttempt)
     }
 
 }

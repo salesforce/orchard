@@ -29,7 +29,8 @@ object ResourceIO {
     resourceName: String,
     instanceId: Int,
     resourceType: String,
-    resourceSpec: JsValue
+    resourceSpec: JsValue,
+    maxAttempt: Int
   )
 
   def apply(conf: Conf): JsResult[ResourceIO] = {

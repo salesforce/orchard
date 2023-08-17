@@ -21,7 +21,9 @@ import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class EmrResource(name: String, loggingPath: String, spec: EmrResource.Spec) extends ResourceIO {
+case class EmrResource(
+  name: String, loggingPath: String, spec: EmrResource.Spec, instanceId: Int, maxAttempt: Int
+) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val releaseLabel = spec.releaseLabel
@@ -92,8 +94,12 @@ case class EmrResource(name: String, loggingPath: String, spec: EmrResource.Spec
                           .instanceType(c.instanceType)
 
                         c.instanceBidPrice
-                          .fold(builder.market(MarketType.ON_DEMAND))(
-                            builder.bidPrice(_).market(MarketType.SPOT)
+                          .fold(builder.market(MarketType.ON_DEMAND))(p =>
+                            if (instanceId == maxAttempt) {
+                              builder.market(MarketType.ON_DEMAND)
+                            } else {
+                              builder.bidPrice(p).market(MarketType.SPOT)
+                            }
                           )
 
                         builder.build()
@@ -242,7 +248,7 @@ object EmrResource {
     .validate[Spec]
     .map { spec =>
       val loggingPath = s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}"
-      EmrResource.apply(conf.resourceName, loggingPath, spec)
+      EmrResource.apply(conf.resourceName, loggingPath, spec, conf.instanceId, conf.maxAttempt)
     }
 
 }
