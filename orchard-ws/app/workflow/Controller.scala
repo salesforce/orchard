@@ -198,7 +198,7 @@ class Controller @Inject() (
                   "errorMessage" -> at.errorMessage,
                   "resourceId" -> at.resourceId,
                   "resourceInstanceAttempt" -> at.resourceInstanceAttempt,
-                  "attmptSpec" -> at.attemptSpec,
+                  "attemptSpec" -> at.attemptSpec,
                   "createdAt" -> at.createdAt,
                   "activatedAt" -> at.activatedAt,
                   "terminatedAt" -> at.terminatedAt
