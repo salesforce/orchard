@@ -22,7 +22,12 @@ import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(name: String, spec: Ec2Resource.Spec, lastAttempt: Boolean) extends ResourceIO {
+case class Ec2Resource(
+  name: String,
+  spec: Ec2Resource.Spec,
+  lastAttempt: Boolean,
+  useOnDemandOnLastAttempt: Boolean
+) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -44,7 +49,7 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec, lastAttempt: Boolea
     spec.securityGroups
       .foldLeft(builder)(_.securityGroupIds(_: _*))
 
-    if (spec.spotInstance && !lastAttempt) {
+    if (spec.spotInstance && !(lastAttempt && useOnDemandOnLastAttempt)) {
       logger.debug(s"create: spotInstance=true")
       builder.instanceMarketOptions(
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
@@ -234,7 +239,8 @@ object Ec2Resource {
     instanceProfile: String,
     securityGroups: Option[Seq[String]],
     tags: Option[Seq[AwsTag]],
-    spotInstance: Boolean
+    spotInstance: Boolean,
+    useOnDemandOnLastAttempt: Option[Boolean]
   )
 
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -242,7 +248,12 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(conf.resourceName, spec, conf.instanceId >= conf.maxAttempt)
+      Ec2Resource.apply(
+        conf.resourceName,
+        spec,
+        conf.instanceId >= conf.maxAttempt,
+        spec.useOnDemandOnLastAttempt.getOrElse(false)
+      )
     }
 
 }

@@ -21,7 +21,13 @@ import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class EmrResource(name: String, loggingPath: String, spec: EmrResource.Spec, lastAttempt: Boolean) extends ResourceIO {
+case class EmrResource(
+  name: String,
+  loggingPath: String,
+  spec: EmrResource.Spec,
+  lastAttempt: Boolean,
+  useOnDemandOnLastAttempt: Boolean
+) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val releaseLabel = spec.releaseLabel
@@ -93,7 +99,7 @@ case class EmrResource(name: String, loggingPath: String, spec: EmrResource.Spec
 
                         c.instanceBidPrice
                           .fold(builder.market(MarketType.ON_DEMAND))(p =>
-                            if (lastAttempt) {
+                            if (lastAttempt && useOnDemandOnLastAttempt) {
                               builder.market(MarketType.ON_DEMAND)
                             } else {
                               builder.bidPrice(p).market(MarketType.SPOT)
@@ -238,7 +244,8 @@ object EmrResource {
     tags: Option[Seq[AwsTag]],
     bootstrapActions: Option[Seq[BootstrapAction]],
     configurations: Option[Seq[ConfigurationSpec]],
-    instancesConfig: InstancesConfig
+    instancesConfig: InstancesConfig,
+    useOnDemandOnLastAttempt: Option[Boolean]
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
 
@@ -246,7 +253,13 @@ object EmrResource {
     .validate[Spec]
     .map { spec =>
       val loggingPath = s"${conf.workflowId}_rsc-${conf.resourceId}_${conf.instanceId}"
-      EmrResource.apply(conf.resourceName, loggingPath, spec, conf.instanceId >= conf.maxAttempt)
+      EmrResource.apply(
+        conf.resourceName,
+        loggingPath,
+        spec,
+        conf.instanceId >= conf.maxAttempt,
+        spec.useOnDemandOnLastAttempt.getOrElse(false)
+      )
     }
 
 }
