@@ -12,11 +12,12 @@ import javax.inject._
 import play.api.routing.sird._
 import play.api.routing.{Router, SimpleRouter}
 
-import controllers.WorkflowController
+import workflow.Controller
 
-class WorkflowsRouter @Inject() (ctlr: WorkflowController) extends SimpleRouter {
+class WorkflowsRouter @Inject() (ctlr: Controller) extends SimpleRouter {
 
   override def routes: Router.Routes = {
+    // TODO to be deprecated, use /v1/workflow instead of workflows
     case GET(
           p"" ?
           q"like=$like" &
