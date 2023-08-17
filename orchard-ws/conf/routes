@@ -12,19 +12,7 @@ GET     /message                    controllers.AsyncController.message
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(file)
 
-POST    /v1/workflow                controllers.WorkflowController.post()
-
-GET     /v1/workflow/:id/activities controllers.WorkflowController.activities(id: String)
-
-PUT     /v1/workflow/:id/cancel     controllers.WorkflowController.cancel(id: String)
-
-PUT     /v1/workflow/:id/activate   controllers.WorkflowController.activate(id: String)
-
-# To Delete
-PUT     /v1/workflow/:id            controllers.WorkflowController.activate(id: String)
-
-DELETE  /v1/workflow/:id            controllers.WorkflowController.delete(id: String)
-
+->      /v1/workflow                workflow.Router
 ->      /v1/workflows               routers.WorkflowsRouter
 ->      /v1/stats                   routers.StatsRouter
 ->      /v1/admin                   admin.Router

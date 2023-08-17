@@ -5,7 +5,7 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-package controllers
+package workflow
 
 import javax.inject._
 
@@ -23,9 +23,11 @@ import com.salesforce.mce.orchard.system.OrchardSystem
 import models.{WorkflowRequest, WorkflowResponse}
 import services.{DatabaseService, OrchardSystemService}
 import utils.UserAction
+import com.salesforce.mce.orchard.db.ActivityQuery
+import models.ActivityResponse
 
 @Singleton
-class WorkflowController @Inject() (
+class Controller @Inject() (
   cc: ControllerComponents,
   db: DatabaseService,
   userAction: UserAction,
@@ -148,23 +150,65 @@ class WorkflowController @Inject() (
                 wf.terminatedAt
               ),
               "activities" -> activities.map { a =>
-                Json.obj(
-                  "activityId" -> a.activityId,
-                  "name" -> a.name,
-                  "activityType" -> a.activtyType,
-                  "activitySpec" -> a.activitySpec,
-                  "resourceId" -> a.resourceId,
-                  "maxAttempt" -> a.maxAttempt,
-                  "status" -> a.status,
-                  "createdAt" -> a.createdAt,
-                  "activatedAt" -> a.activatedAt,
-                  "terminatedAt" -> a.terminatedAt
+                ActivityResponse(
+                  a.activityId,
+                  a.name,
+                  a.activtyType,
+                  a.activitySpec,
+                  a.resourceId,
+                  a.maxAttempt,
+                  a.status.toString(),
+                  a.createdAt,
+                  a.activatedAt,
+                  a.terminatedAt
                 )
               }
             )
           )
         }
       case None => Future.successful(NotFound(JsNull))
+    }
+  }
+
+  def activityAttempts(id: String, actId: String) = userAction.async {
+    val query = new ActivityQuery(id, actId)
+    db.orchardDB.async(query.get()).flatMap {
+      case Some(act) => 
+        for {
+          attempts <- db.orchardDB.async(query.attempts())
+        } yield {
+          Ok(
+            Json.obj(
+              "activity" -> ActivityResponse(
+                act.activityId,
+                act.name,
+                act.activtyType,
+                act.activitySpec,
+                act.resourceId,
+                act.maxAttempt,
+                act.status.toString(),
+                act.createdAt,
+                act.activatedAt,
+                act.terminatedAt
+              ),
+              "attempts" -> attempts.map { at =>
+                Json.obj(
+                  "attempt" -> at.attempt,
+                  "status" -> at.status.toString(),
+                  "errorMessage" -> at.errorMessage,
+                  "resourceId" -> at.resourceId,
+                  "resourceInstanceAttempt" -> at.resourceInstanceAttempt,
+                  "attmptSpec" -> at.attemptSpec,
+                  "createdAt" -> at.createdAt,
+                  "activatedAt" -> at.activatedAt,
+                  "terminatedAt" -> at.terminatedAt
+                )
+              }
+            )
+          )
+        }
+      case None =>
+        Future.successful(NotFound(JsNull))
     }
   }
 
@@ -200,16 +244,15 @@ class WorkflowController @Inject() (
     perPage: Option[Int]
   ) = userAction.async {
     val validated = for {
-      vStatuses <- WorkflowController.validateStatuses(statuses)
-      vOrderBy <- WorkflowController.validateOrderBy(orderBy)
-      vOrder <- WorkflowController.validateOrder(order)
-      vPage <- WorkflowController.validateOne(page.getOrElse(1), "page")
-      limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
+      vStatuses <- Controller.validateStatuses(statuses)
+      vOrderBy <- Controller.validateOrderBy(orderBy)
+      vOrder <- Controller.validateOrder(order)
+      vPage <- Controller.validateOne(page.getOrElse(1), "page")
+      limit <- Controller.validateOne(perPage.getOrElse(50), "per_page")
     } yield (vStatuses, vOrderBy, vOrder, limit, (vPage - 1) * limit)
 
     validated match {
       case Right((stses, by, ord, limit, offset)) =>
-        println(stses)
         db.orchardDB
           .async(WorkflowQuery.filter(like, stses, by, ord, limit, offset))
           .map(rs => Ok(Json.toJson(rs.map(toResponse))))
@@ -238,7 +281,7 @@ class WorkflowController @Inject() (
 
 }
 
-object WorkflowController {
+object Controller {
 
   private def validateStatuses(statuses: Option[String]): Either[String, Seq[Status.Value]] = {
     statuses.fold[Either[String, Seq[Status.Value]]](Right(Seq.empty)){ stses =>
