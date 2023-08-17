@@ -17,8 +17,7 @@ import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
-import com.salesforce.mce.orchard.model
-import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Workflow}
+import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Workflow, Status}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 import models.{WorkflowRequest, WorkflowResponse}
@@ -194,25 +193,25 @@ class WorkflowController @Inject() (
 
   def filter(
     like: String,
-    statuses: Seq[String],
+    statuses: Option[String],
     orderBy: Option[String],
     order: Option[String],
     page: Option[Int],
     perPage: Option[Int]
   ) = userAction.async {
     val validated = for {
+      vStatuses <- WorkflowController.validateStatuses(statuses)
       vOrderBy <- WorkflowController.validateOrderBy(orderBy)
       vOrder <- WorkflowController.validateOrder(order)
       vPage <- WorkflowController.validateOne(page.getOrElse(1), "page")
       limit <- WorkflowController.validateOne(perPage.getOrElse(50), "per_page")
-    } yield (vOrderBy, vOrder, limit, (vPage - 1) * limit)
-
-    val vStatuses = statuses.flatMap(s => Try(model.Status.withName(s)).toOption)
+    } yield (vStatuses, vOrderBy, vOrder, limit, (vPage - 1) * limit)
 
     validated match {
-      case Right((by, ord, limit, offset)) =>
+      case Right((stses, by, ord, limit, offset)) =>
+        println(stses)
         db.orchardDB
-          .async(WorkflowQuery.filter(like, vStatuses, by, ord, limit, offset))
+          .async(WorkflowQuery.filter(like, stses, by, ord, limit, offset))
           .map(rs => Ok(Json.toJson(rs.map(toResponse))))
       case Left(msg) =>
         Future.successful(BadRequest(JsString(msg)))
@@ -240,6 +239,12 @@ class WorkflowController @Inject() (
 }
 
 object WorkflowController {
+
+  private def validateStatuses(statuses: Option[String]): Either[String, Seq[Status.Value]] = {
+    statuses.fold[Either[String, Seq[Status.Value]]](Right(Seq.empty)){ stses =>
+      Right(stses.split(',').flatMap(s => Try(Status.withName(s)).toOption).toSeq)
+    }
+  }
 
   private def validateOrderBy(orderBy: Option[String]): Either[String, WorkflowQuery.OrderBy] = {
     orderBy.fold[Either[String, WorkflowQuery.OrderBy]](Right(WorkflowQuery.OrderBy.CreatedAt)) {

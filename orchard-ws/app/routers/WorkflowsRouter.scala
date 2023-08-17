@@ -20,7 +20,7 @@ class WorkflowsRouter @Inject() (ctlr: WorkflowController) extends SimpleRouter 
     case GET(
           p"" ?
           q"like=$like" &
-          q_s"statuses=$statuses" &
+          q_o"statuses=$statuses" &
           q_o"order_by=$orderBy" &
           q_o"order=$order" &
           q_o"page=${int(page)}" &
