@@ -32,6 +32,9 @@ class Router @Inject() (ctrl: Controller) extends SimpleRouter {
     case GET(p"/$id/activities") => ctrl.activities(id)
     case GET(p"/$id/activity/$actId") => ctrl.activityAttempts(id, actId)
 
+    case GET(p"/$id/resources") => ctrl.resources(id)
+    case GET(p"/$id/resource/$rscId") => ctrl.resourceInstances(id, rscId)
+
     case PUT(p"/$id/cancel") => ctrl.cancel(id)
     case PUT(p"/$id/activate") => ctrl.activate(id)
 

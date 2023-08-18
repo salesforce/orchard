@@ -28,6 +28,10 @@ class WorkflowQuery(workflowId: String) {
     .filter(_.workflowId === workflowId)
     .result
 
+  def resources(): DBIO[Seq[ResourceTable.R]] = ResourceTable()
+    .filter(_.workflowId === workflowId)
+    .result
+
   def dependencies(): DBIO[Seq[DependencyTable.R]] = DependencyTable()
     .filter(_.workflowId === workflowId)
     .result

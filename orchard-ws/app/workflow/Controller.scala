@@ -16,15 +16,13 @@ import play.api.Logging
 import play.api.libs.json.{JsError, JsNull, JsString, JsValue, Json}
 import play.api.mvc._
 
-import com.salesforce.mce.orchard.db.{WorkflowQuery, WorkflowTable}
-import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Workflow, Status}
+import com.salesforce.mce.orchard.db.{ActivityQuery, ResourceQuery, WorkflowQuery, WorkflowTable}
+import com.salesforce.mce.orchard.model.{Action => WfAction, Activity, Resource, Status, Workflow}
 import com.salesforce.mce.orchard.system.OrchardSystem
 
-import models.{WorkflowRequest, WorkflowResponse}
+import models.{ActivityResponse, ResourceResponse, WorkflowRequest, WorkflowResponse}
 import services.{DatabaseService, OrchardSystemService}
 import utils.UserAction
-import com.salesforce.mce.orchard.db.ActivityQuery
-import models.ActivityResponse
 
 @Singleton
 class Controller @Inject() (
@@ -173,7 +171,7 @@ class Controller @Inject() (
   def activityAttempts(id: String, actId: String) = userAction.async {
     val query = new ActivityQuery(id, actId)
     db.orchardDB.async(query.get()).flatMap {
-      case Some(act) => 
+      case Some(act) =>
         for {
           attempts <- db.orchardDB.async(query.attempts())
         } yield {
@@ -202,6 +200,89 @@ class Controller @Inject() (
                   "createdAt" -> at.createdAt,
                   "activatedAt" -> at.activatedAt,
                   "terminatedAt" -> at.terminatedAt
+                )
+              }
+            )
+          )
+        }
+      case None =>
+        Future.successful(NotFound(JsNull))
+    }
+  }
+
+  def resources(id: String) = userAction.async {
+    val query = new WorkflowQuery(id)
+    db.orchardDB.async(query.get()).flatMap {
+      case Some(wf) =>
+        for {
+          resources <- db.orchardDB.async(query.resources())
+        } yield {
+          Ok(
+            Json.obj(
+              "workflow" -> WorkflowResponse(
+                wf.id,
+                wf.name,
+                wf.status.toString,
+                wf.createdAt,
+                wf.activatedAt,
+                wf.terminatedAt
+              ),
+              "resources" -> resources.map { r =>
+                ResourceResponse(
+                  r.workflowId,
+                  r.resourceId,
+                  r.name,
+                  r.resourceType,
+                  r.resourceSpec,
+                  r.maxAttempt,
+                  r.status.toString(),
+                  r.createdAt,
+                  r.activatedAt,
+                  r.terminatedAt,
+                  r.terminateAfter
+                )
+              }
+            )
+          )
+        }
+      case None =>
+        Future.successful(NotFound(JsNull))
+    }
+  }
+
+  def resourceInstances(id: String, rscId: String) = userAction.async {
+    val query = new ResourceQuery(id, rscId)
+    db.orchardDB.async(query.get()).flatMap {
+      case Some(rsc) =>
+        for {
+          insts <- db.orchardDB.async(query.instances())
+        } yield {
+          Ok(
+            Json.obj(
+              "resource" -> ResourceResponse(
+                rsc.workflowId,
+                rsc.resourceId,
+                rsc.name,
+                rsc.resourceType,
+                rsc.resourceSpec,
+                rsc.maxAttempt,
+                rsc.status.toString(),
+                rsc.createdAt,
+                rsc.activatedAt,
+                rsc.terminatedAt,
+                rsc.terminateAfter
+              ),
+              "instances" -> insts.map { inst =>
+                Json.obj(
+                  "workflowId" -> inst.workflowId,
+                  "resourceId" -> inst.resourceId,
+                  "instanceAttempt" -> inst.instanceAttempt,
+                  "instanceSpec" -> inst.instanceSpec,
+                  "status" -> inst.status.toString(),
+                  "errorMessage" -> inst.errorMessage,
+                  "createdAt" -> inst.createdAt,
+                  "activatedAt" -> inst.activatedAt,
+                  "terminatedAt" -> inst.terminatedAt
                 )
               }
             )
@@ -284,7 +365,7 @@ class Controller @Inject() (
 object Controller {
 
   private def validateStatuses(statuses: Option[String]): Either[String, Seq[Status.Value]] = {
-    statuses.fold[Either[String, Seq[Status.Value]]](Right(Seq.empty)){ stses =>
+    statuses.fold[Either[String, Seq[Status.Value]]](Right(Seq.empty)) { stses =>
       Right(stses.split(',').flatMap(s => Try(Status.withName(s)).toOption).toSeq)
     }
   }
