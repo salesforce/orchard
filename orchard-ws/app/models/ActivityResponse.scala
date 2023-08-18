@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 import play.api.libs.json.{JsValue, Json, Reads, Writes}
 
 case class ActivityResponse(
+  workflowId: String,
   activityId: String,
   name: String,
   activityType: String,

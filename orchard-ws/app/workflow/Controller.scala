@@ -149,6 +149,7 @@ class Controller @Inject() (
               ),
               "activities" -> activities.map { a =>
                 ActivityResponse(
+                  a.workflowId,
                   a.activityId,
                   a.name,
                   a.activtyType,
@@ -178,6 +179,7 @@ class Controller @Inject() (
           Ok(
             Json.obj(
               "activity" -> ActivityResponse(
+                act.workflowId,
                 act.activityId,
                 act.name,
                 act.activtyType,
@@ -191,6 +193,8 @@ class Controller @Inject() (
               ),
               "attempts" -> attempts.map { at =>
                 Json.obj(
+                  "workflowId" -> at.workflowId,
+                  "activityId" -> at.activityId,
                   "attempt" -> at.attempt,
                   "status" -> at.status.toString(),
                   "errorMessage" -> at.errorMessage,
