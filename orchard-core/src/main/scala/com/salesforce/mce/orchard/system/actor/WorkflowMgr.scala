@@ -7,13 +7,14 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import scala.concurrent.duration.FiniteDuration
+
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
+
 import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowQuery}
 import com.salesforce.mce.orchard.graph.{AdjacencyList, Graph}
 import com.salesforce.mce.orchard.model.Status
-
-import scala.concurrent.duration.FiniteDuration
 
 object WorkflowMgr {
 
