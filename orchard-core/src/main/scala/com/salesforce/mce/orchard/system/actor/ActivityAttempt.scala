@@ -22,7 +22,7 @@ import com.salesforce.mce.orchard.db.ResourceInstanceQuery
 
 object ActivityAttempt {
 
-  val CheckProgressDelay = 10.seconds
+  val CheckProgressDelay = 2.minutes
 
   sealed trait Msg
   case object Cancel extends Msg
