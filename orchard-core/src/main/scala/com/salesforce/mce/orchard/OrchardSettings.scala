@@ -15,8 +15,6 @@ class OrchardSettings private (config: Config) {
 
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
 
-  val checkProgressDelay = config.getDuration("activity.checkProgressDelay")
-
 }
 
 object OrchardSettings {
