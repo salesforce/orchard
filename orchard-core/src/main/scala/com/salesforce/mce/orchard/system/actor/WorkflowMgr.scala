@@ -7,11 +7,10 @@
 
 package com.salesforce.mce.orchard.system.actor
 
-import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowQuery}
 import com.salesforce.mce.orchard.graph.{AdjacencyList, Graph}
 import com.salesforce.mce.orchard.model.Status
@@ -42,7 +41,7 @@ object WorkflowMgr {
     actionMgr: Option[ActorRef[ActionMgr.Msg]]
   )
 
-  def apply(database: OrchardDatabase, workflowId: String, checkProgressDelay: FiniteDuration): Behavior[Msg] = Behaviors.setup { ctx =>
+  def apply(database: OrchardDatabase, workflowId: String, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors.setup { ctx =>
     val query = new WorkflowQuery(workflowId)
 
     val workflow = database.sync(query.get()).get
@@ -81,16 +80,16 @@ object WorkflowMgr {
       Map.empty,
       Option(actionMgr)
     )
-    val newState = scheduleNextActivities(ctx, database, ps, Status.Finished, checkProgressDelay)
+    val newState = scheduleNextActivities(ctx, database, ps, Status.Finished, orchardSettings)
 
     ctx.log.info(s"WorkflowMgr ${ctx.self} actor $workflowId started")
-    active(ctx, database, checkProgressDelay, newState)
+    active(ctx, database, orchardSettings, newState)
   }
 
   def active(
     ctx: ActorContext[Msg],
     database: OrchardDatabase,
-    checkProgressDelay: FiniteDuration,
+    orchardSettings: OrchardSettings,
     ps: Params
   ): Behavior[Msg] = Behaviors.receiveMessage[Msg] {
 
@@ -126,11 +125,11 @@ object WorkflowMgr {
           activityResources = newActivityResources
         ),
         actStatus,
-        checkProgressDelay
+        orchardSettings
       )
 
       if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, checkProgressDelay, newState)
+      else active(ctx, database, orchardSettings, newState)
 
     case ResourceTerminated(resourceId, rscStatus) =>
       ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
@@ -144,13 +143,13 @@ object WorkflowMgr {
       val newState = ps.copy(resourceMgrs = newResourceMgrs)
 
       if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, checkProgressDelay, newState)
+      else active(ctx, database, orchardSettings, newState)
 
     case ActionCompleted =>
       ctx.log.info(s"${ctx.self} (active) received ActionCompleted")
       val newState = ps.copy(actionMgr = None)
       if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, checkProgressDelay, newState)
+      else active(ctx, database, orchardSettings, newState)
 
     case CancelWorkflow =>
       ctx.log.info(s"${ctx.self} (active) received CancelWorkflow")
@@ -167,7 +166,7 @@ object WorkflowMgr {
     database: OrchardDatabase,
     ps: Params,
     lastActStatus: Status.Value,
-    checkProgressDelay: FiniteDuration
+    orchardSettings: OrchardSettings
   ): Params = {
 
     // get a list of activities where the dependencies are met and are not scheduled, spawn new
@@ -175,7 +174,7 @@ object WorkflowMgr {
     val activityMgrs = (ps.activityGraph.roots -- ps.activityMgrs.keySet).map { actId =>
       val rscMgr = ps.resourceMgrs(ps.activityResources(actId))
       val actMgr = ctx.spawn(
-        ActivityMgr(ctx.self, database, ps.workflowId, actId, rscMgr, checkProgressDelay),
+        ActivityMgr(ctx.self, database, ps.workflowId, actId, rscMgr, orchardSettings),
         s"act-$actId"
       )
       val activityMsg = lastActStatus match {
