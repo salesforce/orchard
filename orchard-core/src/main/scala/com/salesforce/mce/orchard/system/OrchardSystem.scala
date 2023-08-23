@@ -32,7 +32,7 @@ object OrchardSystem {
   private case object HeartBeat extends Msg
   private case object AdoptOrphanWorkflows extends Msg
 
-  def apply(database: OrchardDatabase): Behavior[Msg] = Behaviors.setup { ctx =>
+  def apply(database: OrchardDatabase, checkProgressDelay: FiniteDuration): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       timers.startSingleTimer(ScanCanceling, CancelingScanDelay)
       timers.startSingleTimer(HeartBeat, HeartBeatDelay)
@@ -44,7 +44,8 @@ object OrchardSystem {
         database,
         new WorkflowManagerQuery(managerId),
         timers,
-        Map.empty[String, ActorRef[WorkflowMgr.Msg]]
+        Map.empty[String, ActorRef[WorkflowMgr.Msg]],
+        checkProgressDelay
       )
     }
   }
@@ -54,7 +55,8 @@ object OrchardSystem {
     database: OrchardDatabase,
     query: WorkflowManagerQuery,
     timers: TimerScheduler[Msg],
-    workflows: Map[String, ActorRef[WorkflowMgr.Msg]]
+    workflows: Map[String, ActorRef[WorkflowMgr.Msg]],
+    checkProgressDelay: FiniteDuration
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
 
@@ -68,14 +70,14 @@ object OrchardSystem {
             database.sync(query.manage(workflowId))
           else
             database.sync(query.checkin(Set(workflowId)))
-          val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId), workflowId)
+          val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId, checkProgressDelay), workflowId)
           ctx.watchWith(workflowMgr, WorkflowTerminated(workflowId))
-          apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr))
+          apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr), checkProgressDelay)
         }
 
       case WorkflowTerminated(workflowId) =>
         ctx.log.info(s"${ctx.self} Received WorkflowTerminated($workflowId)")
-        apply(ctx, database, query, timers, workflows - workflowId)
+        apply(ctx, database, query, timers, workflows - workflowId, checkProgressDelay)
 
       case ScanCanceling =>
         ctx.log.debug(s"${ctx.self} Received ScanCanceling")

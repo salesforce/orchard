@@ -32,16 +32,18 @@ class OrchardSystemService @Inject() (
     j <- conf.getOptional[Double]("orchard.system.restart-jitter-probability")
   } yield (a, b, j)
 
+  private val checkProgressDelay = conf.get[Int]("com.salesforce.mce.orchard.activity.checkProgressDelayInMinutes") * 1.minutes
+
   private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] = restartBackoffParams match {
     case Some((minBackoff, maxBackoff, jitter)) =>
       Behaviors
-        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .supervise(OrchardSystem.apply(databaseService.orchardDB, checkProgressDelay))
         .onFailure(
           SupervisorStrategy.restartWithBackoff(minBackoff.seconds, maxBackoff.seconds, jitter)
         )
     case _ =>
       Behaviors
-        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .supervise(OrchardSystem.apply(databaseService.orchardDB, checkProgressDelay))
         .onFailure(SupervisorStrategy.restart)
   }
 

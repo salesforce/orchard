@@ -39,54 +39,57 @@ abstract class Ec2Activity(
    * @param commands  command-id wrt AWS SSM
    * @return
    */
-  private def getProgress(commands: Seq[String]) = {
+  private def getProgress(commands: Seq[String]): Either[Throwable, Status.Value] = {
 
     logger.debug(s"getProgress: commands=$commands")
     val client = Client.ssm()
-    val resp = client
-      .listCommands(
-        ListCommandsRequest.builder().commandId(commands.head).instanceId(ec2IstanceId).build()
-      )
-      .retry()
+    val respEither = retryToEither {
+      client
+        .listCommands(
+          ListCommandsRequest.builder().commandId(commands.head).instanceId(ec2IstanceId).build()
+        )
+    }
     client.close()
-    val statuses = resp
-      .commands()
-      .asScala
-      .map { c =>
-        logger.debug(s"getProgress: command status=${c.status()}")
-        c.status() match {
-          case CommandStatus.IN_PROGRESS => Status.Running
-          case CommandStatus.PENDING => Status.Pending
-          case CommandStatus.FAILED => Status.Failed
-          case CommandStatus.SUCCESS => Status.Finished
-          case CommandStatus.CANCELLED => Status.Canceled
-          case CommandStatus.CANCELLING => Status.Canceling
-          case CommandStatus.TIMED_OUT => Status.Failed
-          case CommandStatus.UNKNOWN_TO_SDK_VERSION => Status.Failed
-          case _ => Status.Failed
+    respEither.map { resp =>
+      val statuses = resp
+        .commands()
+        .asScala
+        .map { c =>
+          logger.debug(s"getProgress: command status=${c.status()}")
+          c.status() match {
+            case CommandStatus.IN_PROGRESS => Status.Running
+            case CommandStatus.PENDING => Status.Pending
+            case CommandStatus.FAILED => Status.Failed
+            case CommandStatus.SUCCESS => Status.Finished
+            case CommandStatus.CANCELLED => Status.Canceled
+            case CommandStatus.CANCELLING => Status.Canceling
+            case CommandStatus.TIMED_OUT => Status.Failed
+            case CommandStatus.UNKNOWN_TO_SDK_VERSION => Status.Failed
+            case _ => Status.Failed
+          }
         }
-      }
-      .toSet
+        .toSet
 
-    if (statuses.isEmpty || statuses.contains(Status.Failed))
-      Status.Failed
-    else if (statuses.contains(Status.Canceling))
-      Status.Canceling
-    else if (statuses.contains(Status.Canceled))
-      Status.Canceled
-    else if (statuses.contains(Status.Running))
-      Status.Running
-    else if (statuses.size == 1 && statuses.contains(Status.Finished))
-      Status.Finished
-    else
-      Status.Pending
+      if (statuses.isEmpty || statuses.contains(Status.Failed))
+        Status.Failed
+      else if (statuses.contains(Status.Canceling))
+        Status.Canceling
+      else if (statuses.contains(Status.Canceled))
+        Status.Canceled
+      else if (statuses.contains(Status.Running))
+        Status.Running
+      else if (statuses.size == 1 && statuses.contains(Status.Finished))
+        Status.Finished
+      else
+        Status.Pending
+    }
   }
 
   override def getProgress(spec: JsValue): Either[Throwable, Status.Value] = spec
     .validate[Seq[String]]
     .fold(
       invalid => Left(InvalidJsonException.raise(invalid)),
-      valid => Right(getProgress(valid))
+      valid => getProgress(valid)
     )
 
   /**
