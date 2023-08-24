@@ -66,7 +66,7 @@ object ActivityMgr {
 
     database
       .sync(activityQuery.get())
-      .map{ r =>
+      .map { r =>
         params.ctx.log.info(s"${ctx.self} init with status ${r.status}")
         init(params, r.status, orchardSettings)
       }
@@ -93,9 +93,8 @@ object ActivityMgr {
           if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) {
             Right(r.attempt + 1)
           } else if (Status.isAlive(r.status)) {
-            Right(r.attempt)  // resume an already live attempt
-          }
-          else Left(r.status)
+            Right(r.attempt) // resume an already live attempt
+          } else Left(r.status)
         case None =>
           Right(1)
       }
@@ -135,71 +134,13 @@ object ActivityMgr {
     Behaviors.stopped
   }
 
-  private def idle(ps: Params, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors.receiveMessage {
-    case Start =>
-      ps.ctx.log.info(s"${ps.ctx.self} (idle) received Start")
-      ps.database.sync(ps.activityQuery.setRunning())
-      val attmptId = 1
-      val attempt = ps.ctx.spawn(
-        ActivityAttempt(
-          ps.ctx.self,
-          ps.resourceMgr,
-          ps.database,
-          ps.workflowId,
-          ps.activityId,
-          ps.activityName,
-          attmptId,
-          ps.activityType,
-          ps.activitySpec,
-          ps.resourceId,
-          orchardSettings.checkProgressDelay
-        ),
-        s"attempt-${attmptId}"
-      )
-      running(ps, attmptId, attempt, orchardSettings)
-    case CascadeFail =>
-      ps.ctx.log.info(s"${ps.ctx.self} (idle) received CascadeFail")
-      val sts = Status.CascadeFailed
-      ps.database.sync(ps.activityQuery.setTerminated(sts))
-      terminate(ps, sts)
-    case Cancel =>
-      ps.ctx.log.info(s"${ps.ctx.self} (idle) received Cancel")
-      val sts = Status.Canceled
-      ps.database.sync(ps.activityQuery.setTerminated(sts))
-      terminate(ps, sts)
-    case AttemptFinished(sts) =>
-      ps.ctx.log.error(s"${ps.ctx.self} (idle) received unexpected AttemptFinished($sts)")
-      terminate(ps, sts)
-  }
-
-  private def running(
-    ps: Params,
-    attemptId: Int,
-    attempt: ActorRef[ActivityAttempt.Msg],
-    orchardSettings: OrchardSettings
-  ): Behavior[Msg] = Behaviors.receiveMessage {
-    case Start =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received Start")
-      Behaviors.same
-    case CascadeFail =>
-      ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected CascadeFail")
-      attempt ! ActivityAttempt.Cancel
-      Behaviors.same
-    case Cancel =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
-      attempt ! ActivityAttempt.Cancel
-      Behaviors.same
-    case AttemptFinished(
-          sts @ (Status.Finished | Status.Canceled | Status.Timeout | Status.CascadeFailed)
-        ) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
-      ps.database.sync(ps.activityQuery.setTerminated(sts))
-      terminate(ps, sts)
-    case AttemptFinished(sts @ Status.Failed) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
-      if (attemptId < ps.maxAttempt) {
-        val newAttmptId = attemptId + 1
-        val newAttempt = ps.ctx.spawn(
+  private def idle(ps: Params, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
+      case Start =>
+        ps.ctx.log.info(s"${ps.ctx.self} (idle) received Start")
+        ps.database.sync(ps.activityQuery.setRunning())
+        val attmptId = 1
+        val attempt = ps.ctx.spawn(
           ActivityAttempt(
             ps.ctx.self,
             ps.resourceMgr,
@@ -207,22 +148,90 @@ object ActivityMgr {
             ps.workflowId,
             ps.activityId,
             ps.activityName,
-            newAttmptId,
+            attmptId,
             ps.activityType,
             ps.activitySpec,
             ps.resourceId,
             orchardSettings.checkProgressDelay
           ),
-          s"attempt-${newAttmptId}"
+          s"attempt-${attmptId}"
         )
-        running(ps, newAttmptId, newAttempt, orchardSettings)
-      } else {
+        running(ps, attmptId, attempt, orchardSettings)
+      case CascadeFail =>
+        ps.ctx.log.info(s"${ps.ctx.self} (idle) received CascadeFail")
+        val sts = Status.CascadeFailed
         ps.database.sync(ps.activityQuery.setTerminated(sts))
         terminate(ps, sts)
-      }
-    case AttemptFinished(sts) =>
-      ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected AttemptFinished($sts)")
-      terminate(ps, sts)
-  }
+      case Cancel =>
+        ps.ctx.log.info(s"${ps.ctx.self} (idle) received Cancel")
+        val sts = Status.Canceled
+        ps.database.sync(ps.activityQuery.setTerminated(sts))
+        terminate(ps, sts)
+      case AttemptFinished(sts) =>
+        ps.ctx.log.error(s"${ps.ctx.self} (idle) received unexpected AttemptFinished($sts)")
+        terminate(ps, sts)
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (idle) received signal $signal")
+      Behaviors.same
+    }
+
+  private def running(
+    ps: Params,
+    attemptId: Int,
+    attempt: ActorRef[ActivityAttempt.Msg],
+    orchardSettings: OrchardSettings
+  ): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
+      case Start =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received Start")
+        Behaviors.same
+      case CascadeFail =>
+        ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected CascadeFail")
+        attempt ! ActivityAttempt.Cancel
+        Behaviors.same
+      case Cancel =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
+        attempt ! ActivityAttempt.Cancel
+        Behaviors.same
+      case AttemptFinished(
+            sts @ (Status.Finished | Status.Canceled | Status.Timeout | Status.CascadeFailed)
+          ) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
+        ps.database.sync(ps.activityQuery.setTerminated(sts))
+        terminate(ps, sts)
+      case AttemptFinished(sts @ Status.Failed) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
+        if (attemptId < ps.maxAttempt) {
+          val newAttmptId = attemptId + 1
+          val newAttempt = ps.ctx.spawn(
+            ActivityAttempt(
+              ps.ctx.self,
+              ps.resourceMgr,
+              ps.database,
+              ps.workflowId,
+              ps.activityId,
+              ps.activityName,
+              newAttmptId,
+              ps.activityType,
+              ps.activitySpec,
+              ps.resourceId,
+              orchardSettings.checkProgressDelay
+            ),
+            s"attempt-${newAttmptId}"
+          )
+          running(ps, newAttmptId, newAttempt, orchardSettings)
+        } else {
+          ps.database.sync(ps.activityQuery.setTerminated(sts))
+          terminate(ps, sts)
+        }
+      case AttemptFinished(sts) =>
+        ps.ctx.log.error(s"${ps.ctx.self} (running) received unexpected AttemptFinished($sts)")
+        terminate(ps, sts)
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
+      Behaviors.same
+    }
 
 }

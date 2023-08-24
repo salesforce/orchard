@@ -148,60 +148,65 @@ object ActivityAttempt {
     activitySpec: JsValue,
     checkProgressDelay: FiniteDuration
   ): Behavior[Msg] =
-    Behaviors.receiveMessage {
-      case Cancel =>
-        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Cancel")
-        val sts = Status.Canceled
-        ps.database.sync(ps.query.setTerminated(sts, ""))
-        terminate(ps, sts)
-      case ResourceInstSpec(specEither) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received ResourceInstSpec($specEither)")
-        specEither match {
-          // resource is up, with valid instance spec, start the activity
-          case Right((resourceInst, spec)) =>
-            val result = for {
-              activityIO <- ActivityIO(
-                ActivityIO.Conf(
-                  ps.workflowId,
-                  ps.activityId,
-                  ps.activityName,
-                  ps.attemptId,
-                  activityType,
-                  activitySpec,
-                  spec
-                )
-              ).asEither.left
-                .map(InvalidJsonException.raise(_))
-              attemptSpec <- activityIO.create()
-            } yield (activityIO, attemptSpec)
+    Behaviors
+      .receiveMessage[Msg] {
+        case Cancel =>
+          ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Cancel")
+          val sts = Status.Canceled
+          ps.database.sync(ps.query.setTerminated(sts, ""))
+          terminate(ps, sts)
+        case ResourceInstSpec(specEither) =>
+          ps.ctx.log.info(s"${ps.ctx.self} (waiting) received ResourceInstSpec($specEither)")
+          specEither match {
+            // resource is up, with valid instance spec, start the activity
+            case Right((resourceInst, spec)) =>
+              val result = for {
+                activityIO <- ActivityIO(
+                  ActivityIO.Conf(
+                    ps.workflowId,
+                    ps.activityId,
+                    ps.activityName,
+                    ps.attemptId,
+                    activityType,
+                    activitySpec,
+                    spec
+                  )
+                ).asEither.left
+                  .map(InvalidJsonException.raise(_))
+                attemptSpec <- activityIO.create()
+              } yield (activityIO, attemptSpec)
 
-            result match {
-              case Left(exp) =>
-                ps.ctx.log.error(s"ActivityAttempt ${ps.ctx.self} exception in creating task", exp)
-                ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
-                terminate(ps, Status.Failed)
-              case Right((activityIO, attemptSpec)) =>
-                ps.database.sync(ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec))
-                running(ps, resourceInst, activityIO, attemptSpec, checkProgressDelay)
-            }
+              result match {
+                case Left(exp) =>
+                  ps.ctx.log.error(s"ActivityAttempt ${ps.ctx.self} exception in creating task", exp)
+                  ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
+                  terminate(ps, Status.Failed)
+                case Right((activityIO, attemptSpec)) =>
+                  ps.database.sync(ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec))
+                  running(ps, resourceInst, activityIO, attemptSpec, checkProgressDelay)
+              }
 
-          // Resource not ready yet
-          case Left(Status.Pending) =>
-            ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
-            Behaviors.same
+            // Resource not ready yet
+            case Left(Status.Pending) =>
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
+              Behaviors.same
 
-          // Resource down for unknown reason, cancel the activity?
-          case Left(_) =>
-            val sts = Status.Canceled
-            ps.database.sync(ps.query.setTerminated(sts, ""))
-            terminate(ps, sts)
+            // Resource down for unknown reason, cancel the activity?
+            case Left(_) =>
+              val sts = Status.Canceled
+              ps.database.sync(ps.query.setTerminated(sts, ""))
+              terminate(ps, sts)
 
-        }
-      case CheckProgress =>
-        ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CheckProgress")
-        resourceMgr ! ResourceMgr.GetResourceInstSpec(ps.rscInstSpecAdapter)
+          }
+        case CheckProgress =>
+          ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CheckProgress")
+          resourceMgr ! ResourceMgr.GetResourceInstSpec(ps.rscInstSpecAdapter)
+          Behaviors.same
+      }
+      .receiveSignal { case (actorContext, signal) =>
+        ps.ctx.log.info(s"${actorContext.self} (waiting) received signal $signal")
         Behaviors.same
-    }
+      }
 
   def running(
     ps: Params,
@@ -211,34 +216,39 @@ object ActivityAttempt {
     checkProgressDelay: FiniteDuration
   ): Behavior[Msg] = {
     ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
-    Behaviors.receiveMessage {
-      case Cancel =>
-        ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
-        val sts = activityIO.terminate(attemptSpec).getOrElse(Status.Failed)
-        ps.database.sync(ps.query.setTerminated(sts, ""))
-        terminate(ps, sts)
-      case ResourceInstSpec(spec) =>
-        ps.ctx.log.error(
-          s"${ps.ctx.self} (running) received unexpected ResourceInstSpec($spec) during running state"
-        )
-        ps.database.sync(ps.query.setTerminated(Status.Failed, "Internal Error"))
-        terminate(ps, Status.Failed)
-      case CheckProgress =>
-        ps.ctx.log.info(s"${ps.ctx.self} (running) received CheckProgress")
-        activityIO.getProgress(attemptSpec) match {
-          case Left(exp) =>
-            val errorMessage = s"Failed getting attempt progress $exp"
-            ps.ctx.log.error(errorMessage)
-            ps.database.sync(ps.query.setTerminated(Status.Failed, errorMessage))
-            terminate(ps, Status.Failed)
-          case Right(status) if Status.TerminatedStatuses.contains(status) =>
-            ps.database.sync(ps.query.setTerminated(status, ""))
-            terminate(ps, status)
-          case Right(status) =>
-            ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
-            Behaviors.same
-        }
-    }
+    Behaviors
+      .receiveMessage[Msg] {
+        case Cancel =>
+          ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
+          val sts = activityIO.terminate(attemptSpec).getOrElse(Status.Failed)
+          ps.database.sync(ps.query.setTerminated(sts, ""))
+          terminate(ps, sts)
+        case ResourceInstSpec(spec) =>
+          ps.ctx.log.error(
+            s"${ps.ctx.self} (running) received unexpected ResourceInstSpec($spec) during running state"
+          )
+          ps.database.sync(ps.query.setTerminated(Status.Failed, "Internal Error"))
+          terminate(ps, Status.Failed)
+        case CheckProgress =>
+          ps.ctx.log.info(s"${ps.ctx.self} (running) received CheckProgress")
+          activityIO.getProgress(attemptSpec) match {
+            case Left(exp) =>
+              val errorMessage = s"Failed getting attempt progress $exp"
+              ps.ctx.log.error(errorMessage)
+              ps.database.sync(ps.query.setTerminated(Status.Failed, errorMessage))
+              terminate(ps, Status.Failed)
+            case Right(status) if Status.TerminatedStatuses.contains(status) =>
+              ps.database.sync(ps.query.setTerminated(status, ""))
+              terminate(ps, status)
+            case Right(status) =>
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
+              Behaviors.same
+          }
+      }
+      .receiveSignal { case (actorContext, signal) =>
+        ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
+        Behaviors.same
+      }
   }
 
   def terminate(ps: Params, status: Status.Value): Behavior[Msg] = {
