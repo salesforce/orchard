@@ -103,7 +103,7 @@ object WorkflowMgr {
 
         val nextStatus = actStatus match {
           case Status.Canceled => Status.Canceled
-          case Status.Finished => Status.Finished
+          case Status.Finished => ps.status  // carry on previous failure status
           case _ => Status.Failed
         }
 
@@ -134,7 +134,7 @@ object WorkflowMgr {
         else active(ctx, database, orchardSettings, newState)
 
       case ResourceTerminated(resourceId, rscStatus) =>
-        ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
+        ctx.log.info(s"${ctx.self} (active) received ResourceTerminated($resourceId, $rscStatus)")
         val newResourceMgrs = ps.resourceMgrs - resourceId
         for {
           (actId, rscId) <- ps.activityResources
