@@ -91,74 +91,89 @@ object ResourceInstance {
   }
 
   // pending is the initial state after RI is created
-  private def pending(ps: Params): Behavior[Msg] = Behaviors.receiveMessage {
-    case GetResourceInstSpec(replyTo) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (pending) received GetResourceInstSpec($replyTo)")
-      ps.resourceIO.create() match {
-        case Right(instSpec) =>
-          ps.database.sync(ps.query.setActivated(instSpec))
-          ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
-          activating(ps, instSpec)
-        case Left(exp) =>
-          ps.ctx.log.error(s"${ps.ctx.self} (pending) Exception when creating resource", exp)
-          ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
-          terminate(ps, Status.Failed, Option(replyTo))
-      }
-    case Shutdown(status) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (pending) received Shutdown($status)")
-      ps.database.sync(ps.query.setTerminated(status, ""))
-      terminate(ps, status, None)
-  }
+  private def pending(ps: Params): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
+      case GetResourceInstSpec(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (pending) received GetResourceInstSpec($replyTo)")
+        ps.resourceIO.create() match {
+          case Right(instSpec) =>
+            ps.database.sync(ps.query.setActivated(instSpec))
+            ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
+            activating(ps, instSpec)
+          case Left(exp) =>
+            ps.ctx.log.error(s"${ps.ctx.self} (pending) Exception when creating resource", exp)
+            ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
+            terminate(ps, Status.Failed, Option(replyTo))
+        }
+      case Shutdown(status) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (pending) received Shutdown($status)")
+        ps.database.sync(ps.query.setTerminated(status, ""))
+        terminate(ps, status, None)
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (pending) received signal $signal")
+      Behaviors.same
+    }
 
   // activating status is the status where resource instance is up but awating for ready status
-  private def activating(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {
-    case GetResourceInstSpec(replyTo) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (activating) received GetResourceInstSpec($replyTo)")
-      ps.resourceIO.getStatus(instSpec) match {
-        case Right(Status.Activating) =>
-          ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource status Activating")
-          ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
-          Behaviors.same
-        case Right(Status.Running) =>
-          ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource status Running")
-          ps.database.sync(ps.query.setRunning())
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
-          running(ps, instSpec)
-        case Right(sts) =>
-          ps.ctx.log.info(
-            s"${ps.ctx.self} (activating) received resource status $sts, shutting down"
-          )
-          shuttingDown(ps, instSpec, sts, Option(replyTo))
-        case Left(exp) =>
-          ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource exception, shutting down")
-          shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
-      }
-    case Shutdown(status) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (activating) received Shutdown($status)")
-      shuttingDown(ps, instSpec, if (status == Status.Timeout) status else Status.Failed, None)
-  }
+  private def activating(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
+      case GetResourceInstSpec(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (activating) received GetResourceInstSpec($replyTo)")
+        ps.resourceIO.getStatus(instSpec) match {
+          case Right(Status.Activating) =>
+            ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource status Activating")
+            ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
+            Behaviors.same
+          case Right(Status.Running) =>
+            ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource status Running")
+            ps.database.sync(ps.query.setRunning())
+            replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
+            running(ps, instSpec)
+          case Right(sts) =>
+            ps.ctx.log.info(
+              s"${ps.ctx.self} (activating) received resource status $sts, shutting down"
+            )
+            shuttingDown(ps, instSpec, sts, Option(replyTo))
+          case Left(exp) =>
+            ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource exception, shutting down")
+            shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
+        }
+      case Shutdown(status) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (activating) received Shutdown($status)")
+        shuttingDown(ps, instSpec, if (status == Status.Timeout) status else Status.Failed, None)
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (activating) received signal $signal")
+      Behaviors.same
+    }
 
-  private def running(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors.receiveMessage {
-    case GetResourceInstSpec(replyTo) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec(${replyTo})")
-      ps.resourceIO.getStatus(instSpec) match {
-        case Right(Status.Running) =>
-          replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
-          Behaviors.same
-        case Right(sts) =>
-          ps.ctx.log.info(
-            s"${ps.ctx.self} (running) received resource status $sts, shutting down"
-          )
-          shuttingDown(ps, instSpec, sts, Option(replyTo))
-        case sts =>
-          ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")
-          ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
-          terminate(ps, Status.Failed, Option(replyTo))
-      }
-    case Shutdown(status) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
-      shuttingDown(ps, instSpec, status, None)
-  }
+  private def running(ps: Params, instSpec: JsValue): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
+      case GetResourceInstSpec(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec(${replyTo})")
+        ps.resourceIO.getStatus(instSpec) match {
+          case Right(Status.Running) =>
+            replyTo ! ResourceMgr.ResourceInstSpecRsp(Right(ps.instanceId -> instSpec))
+            Behaviors.same
+          case Right(sts) =>
+            ps.ctx.log.info(
+              s"${ps.ctx.self} (running) received resource status $sts, shutting down"
+            )
+            shuttingDown(ps, instSpec, sts, Option(replyTo))
+          case sts =>
+            ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")
+            ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
+            terminate(ps, Status.Failed, Option(replyTo))
+        }
+      case Shutdown(status) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
+        shuttingDown(ps, instSpec, status, None)
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
+      Behaviors.same
+    }
 
   private def shuttingDown(
     ps: Params,

@@ -41,125 +41,128 @@ object WorkflowMgr {
     actionMgr: Option[ActorRef[ActionMgr.Msg]]
   )
 
-  def apply(database: OrchardDatabase, workflowId: String, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors.setup { ctx =>
-    val query = new WorkflowQuery(workflowId)
+  def apply(database: OrchardDatabase, workflowId: String, orchardSettings: OrchardSettings): Behavior[Msg] =
+    Behaviors.setup { ctx =>
+      val query = new WorkflowQuery(workflowId)
 
-    val workflow = database.sync(query.get()).get
-    val activities = database.sync(query.activities())
-    val dependencies = database.sync(query.dependencies())
+      val workflow = database.sync(query.get()).get
+      val activities = database.sync(query.activities())
+      val dependencies = database.sync(query.dependencies())
 
-    val initialVertices = activities.foldLeft(new AdjacencyList[String]()) { (g, v) =>
-      g.addVertex(v.activityId)
-    }
+      val initialVertices = activities.foldLeft(new AdjacencyList[String]()) { (g, v) =>
+        g.addVertex(v.activityId)
+      }
 
-    val graph = dependencies.foldLeft(initialVertices) { (g, d) =>
-      g.addEdge(d.activityId, d.dependentId)
-    }
+      val graph = dependencies.foldLeft(initialVertices) { (g, d) =>
+        g.addEdge(d.activityId, d.dependentId)
+      }
 
-    val activityResources = activities.map(a => a.activityId -> a.resourceId).toMap
+      val activityResources = activities.map(a => a.activityId -> a.resourceId).toMap
 
-    val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
-      rscId -> ctx.spawn(
-        ResourceMgr(database, ctx.self, workflowId, rscId),
-        s"rsc-$rscId"
+      val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
+        rscId -> ctx.spawn(
+          ResourceMgr(database, ctx.self, workflowId, rscId),
+          s"rsc-$rscId"
+        )
+      }.toMap
+
+      val actionMgr = ctx.spawn(ActionMgr(database, ctx.self, workflowId), "acn-mgr")
+      ctx.watchWith(actionMgr, ActionCompleted)
+
+      val ps = Params(
+        ctx,
+        database,
+        query,
+        workflowId,
+        workflow.status,
+        graph,
+        activityResources,
+        resourceMgrs,
+        Map.empty,
+        Option(actionMgr)
       )
-    }.toMap
+      val newState = scheduleNextActivities(ctx, database, ps, Status.Finished, orchardSettings)
 
-    val actionMgr = ctx.spawn(ActionMgr(database, ctx.self, workflowId), "acn-mgr")
-    ctx.watchWith(actionMgr, ActionCompleted)
-
-    val ps = Params(
-      ctx,
-      database,
-      query,
-      workflowId,
-      workflow.status,
-      graph,
-      activityResources,
-      resourceMgrs,
-      Map.empty,
-      Option(actionMgr)
-    )
-    val newState = scheduleNextActivities(ctx, database, ps, Status.Finished, orchardSettings)
-
-    ctx.log.info(s"WorkflowMgr ${ctx.self} actor $workflowId started")
-    active(ctx, database, orchardSettings, newState)
-  }
+      ctx.log.info(s"WorkflowMgr ${ctx.self} actor $workflowId started")
+      active(ctx, database, orchardSettings, newState)
+    }
 
   def active(
     ctx: ActorContext[Msg],
     database: OrchardDatabase,
     orchardSettings: OrchardSettings,
     ps: Params
-  ): Behavior[Msg] = Behaviors.receiveMessage[Msg] {
+  ): Behavior[Msg] = Behaviors
+    .receiveMessage[Msg] {
 
-    case ActivityCompleted(activityId, actStatus) =>
-      ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
+      case ActivityCompleted(activityId, actStatus) =>
+        ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
 
-      // trigger the necessary action
-      ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
+        // trigger the necessary action
+        ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
 
-      val nextStatus = actStatus match {
-        case Status.Canceled => Status.Canceled
-        case Status.Finished => Status.Finished
-        case _ => Status.Failed
-      }
+        val nextStatus = actStatus match {
+          case Status.Canceled => Status.Canceled
+          case Status.Finished => Status.Finished
+          case _ => Status.Failed
+        }
 
-      val newGraph = ps.activityGraph.removeVertex(activityId)
-      val activityMgrs = ps.activityMgrs - activityId
-      val newActivityResources = ps.activityResources - activityId
+        val newGraph = ps.activityGraph.removeVertex(activityId)
+        val activityMgrs = ps.activityMgrs - activityId
+        val newActivityResources = ps.activityResources - activityId
 
-      val rscId = ps.activityResources(activityId)
-      // if no other activities depend on the resource, we can shut it down
-      if (!newActivityResources.values.toSet.contains(rscId)) {
-        ps.resourceMgrs(rscId) ! ResourceMgr.Shutdown(Status.Finished)
-      }
+        val rscId = ps.activityResources(activityId)
+        // if no other activities depend on the resource, we can shut it down
+        if (!newActivityResources.values.toSet.contains(rscId)) {
+          ps.resourceMgrs(rscId) ! ResourceMgr.Shutdown(Status.Finished)
+        }
 
-      val newState = scheduleNextActivities(
-        ctx,
-        database,
-        ps.copy(
-          activityGraph = newGraph,
-          status = nextStatus,
-          activityMgrs = activityMgrs,
-          activityResources = newActivityResources
-        ),
-        actStatus,
-        orchardSettings
-      )
+        val newState = scheduleNextActivities(
+          ctx,
+          database,
+          ps.copy(
+            activityGraph = newGraph,
+            status = nextStatus,
+            activityMgrs = activityMgrs,
+            activityResources = newActivityResources
+          ),
+          actStatus,
+          orchardSettings
+        )
 
-      if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, orchardSettings, newState)
+        if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
+        else active(ctx, database, orchardSettings, newState)
 
-    case ResourceTerminated(resourceId, rscStatus) =>
-      ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
-      val newResourceMgrs = ps.resourceMgrs - resourceId
-      for {
-        (actId, rscId) <- ps.activityResources
-        if rscId == resourceId
-        actMgr <- ps.activityMgrs.get(actId)
-      } actMgr ! ActivityMgr.Cancel
+      case ResourceTerminated(resourceId, rscStatus) =>
+        ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
+        val newResourceMgrs = ps.resourceMgrs - resourceId
+        for {
+          (actId, rscId) <- ps.activityResources
+          if rscId == resourceId
+          actMgr <- ps.activityMgrs.get(actId)
+        } actMgr ! ActivityMgr.Cancel
 
-      val newState = ps.copy(resourceMgrs = newResourceMgrs)
+        val newState = ps.copy(resourceMgrs = newResourceMgrs)
 
-      if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, orchardSettings, newState)
+        if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
+        else active(ctx, database, orchardSettings, newState)
 
-    case ActionCompleted =>
-      ctx.log.info(s"${ctx.self} (active) received ActionCompleted")
-      val newState = ps.copy(actionMgr = None)
-      if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
-      else active(ctx, database, orchardSettings, newState)
+      case ActionCompleted =>
+        ctx.log.info(s"${ctx.self} (active) received ActionCompleted")
+        val newState = ps.copy(actionMgr = None)
+        if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
+        else active(ctx, database, orchardSettings, newState)
 
-    case CancelWorkflow =>
-      ctx.log.info(s"${ctx.self} (active) received CancelWorkflow")
-      ps.activityMgrs.values.foreach(_ ! ActivityMgr.Cancel)
+      case CancelWorkflow =>
+        ctx.log.info(s"${ctx.self} (active) received CancelWorkflow")
+        ps.activityMgrs.values.foreach(_ ! ActivityMgr.Cancel)
+        Behaviors.same
+
+    }
+    .receiveSignal { case (actorContext, signal) =>
+      ps.ctx.log.info(s"${actorContext.self} (active) received signal $signal")
       Behaviors.same
-
-  } receiveSignal { case (c, PostStop) =>
-    c.log.info(s"${c.self} stopped")
-    Behaviors.same
-  }
+    }
 
   def scheduleNextActivities(
     ctx: ActorContext[Msg],
