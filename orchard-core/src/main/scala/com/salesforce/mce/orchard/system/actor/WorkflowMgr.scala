@@ -101,16 +101,11 @@ object WorkflowMgr {
         // trigger the necessary action
         ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
 
-        val nextStatus =
-          if (ps.status != Status.Finished) {
-            ps.status
-          } else {
-            actStatus match {
-              case Status.Canceled => Status.Canceled
-              case Status.Finished => Status.Finished
-              case _ => Status.Failed
-            }
-          }
+        val nextStatus = actStatus match {
+          case Status.Canceled => Status.Canceled
+          case Status.Finished => ps.status  // carry on previous failure status
+          case _ => Status.Failed
+        }
 
         val newGraph = ps.activityGraph.removeVertex(activityId)
         val activityMgrs = ps.activityMgrs - activityId
