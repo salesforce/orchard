@@ -101,11 +101,16 @@ object WorkflowMgr {
         // trigger the necessary action
         ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
 
-        val nextStatus = actStatus match {
-          case Status.Canceled => Status.Canceled
-          case Status.Finished => Status.Finished
-          case _ => Status.Failed
-        }
+        val nextStatus =
+          if (ps.status != Status.Finished) {
+            ps.status
+          } else {
+            actStatus match {
+              case Status.Canceled => Status.Canceled
+              case Status.Finished => Status.Finished
+              case _ => Status.Failed
+            }
+          }
 
         val newGraph = ps.activityGraph.removeVertex(activityId)
         val activityMgrs = ps.activityMgrs - activityId
@@ -134,7 +139,7 @@ object WorkflowMgr {
         else active(ctx, database, orchardSettings, newState)
 
       case ResourceTerminated(resourceId, rscStatus) =>
-        ctx.log.info(s"${ctx.self} (active) recieved ResourceTerminated($resourceId, $rscStatus)")
+        ctx.log.info(s"${ctx.self} (active) received ResourceTerminated($resourceId, $rscStatus)")
         val newResourceMgrs = ps.resourceMgrs - resourceId
         for {
           (actId, rscId) <- ps.activityResources
