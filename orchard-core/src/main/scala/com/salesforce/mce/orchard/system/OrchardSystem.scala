@@ -15,6 +15,7 @@ import scala.concurrent.duration._
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed.{ActorRef, Behavior}
 
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowManagerQuery, WorkflowQuery}
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.actor.WorkflowMgr
@@ -32,7 +33,7 @@ object OrchardSystem {
   private case object HeartBeat extends Msg
   private case object AdoptOrphanWorkflows extends Msg
 
-  def apply(database: OrchardDatabase): Behavior[Msg] = Behaviors.setup { ctx =>
+  def apply(database: OrchardDatabase, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       timers.startSingleTimer(ScanCanceling, CancelingScanDelay)
       timers.startSingleTimer(HeartBeat, HeartBeatDelay)
@@ -44,7 +45,8 @@ object OrchardSystem {
         database,
         new WorkflowManagerQuery(managerId),
         timers,
-        Map.empty[String, ActorRef[WorkflowMgr.Msg]]
+        Map.empty[String, ActorRef[WorkflowMgr.Msg]],
+        orchardSettings
       )
     }
   }
@@ -54,7 +56,8 @@ object OrchardSystem {
     database: OrchardDatabase,
     query: WorkflowManagerQuery,
     timers: TimerScheduler[Msg],
-    workflows: Map[String, ActorRef[WorkflowMgr.Msg]]
+    workflows: Map[String, ActorRef[WorkflowMgr.Msg]],
+    orchardSettings: OrchardSettings
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
 
@@ -68,14 +71,14 @@ object OrchardSystem {
             database.sync(query.manage(workflowId))
           else
             database.sync(query.checkin(Set(workflowId)))
-          val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId), workflowId)
+          val workflowMgr = ctx.spawn(WorkflowMgr.apply(database, workflowId, orchardSettings), workflowId)
           ctx.watchWith(workflowMgr, WorkflowTerminated(workflowId))
-          apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr))
+          apply(ctx, database, query, timers, workflows + (workflowId -> workflowMgr), orchardSettings)
         }
 
       case WorkflowTerminated(workflowId) =>
         ctx.log.info(s"${ctx.self} Received WorkflowTerminated($workflowId)")
-        apply(ctx, database, query, timers, workflows - workflowId)
+        apply(ctx, database, query, timers, workflows - workflowId, orchardSettings)
 
       case ScanCanceling =>
         ctx.log.debug(s"${ctx.self} Received ScanCanceling")

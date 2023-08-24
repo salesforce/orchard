@@ -17,6 +17,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
 import play.api.Configuration
 
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.system.OrchardSystem
 
 @Singleton
@@ -32,16 +33,18 @@ class OrchardSystemService @Inject() (
     j <- conf.getOptional[Double]("orchard.system.restart-jitter-probability")
   } yield (a, b, j)
 
+  private val orchardSettings = OrchardSettings.withRootConfig(conf.underlying)
+
   private val supervisedOrchardSystem: Behavior[OrchardSystem.Msg] = restartBackoffParams match {
     case Some((minBackoff, maxBackoff, jitter)) =>
       Behaviors
-        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .supervise(OrchardSystem.apply(databaseService.orchardDB, orchardSettings))
         .onFailure(
           SupervisorStrategy.restartWithBackoff(minBackoff.seconds, maxBackoff.seconds, jitter)
         )
     case _ =>
       Behaviors
-        .supervise(OrchardSystem.apply(databaseService.orchardDB))
+        .supervise(OrchardSystem.apply(databaseService.orchardDB, orchardSettings))
         .onFailure(SupervisorStrategy.restart)
   }
 

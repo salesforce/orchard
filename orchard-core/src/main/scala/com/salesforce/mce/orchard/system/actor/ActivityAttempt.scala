@@ -22,8 +22,6 @@ import com.salesforce.mce.orchard.db.ResourceInstanceQuery
 
 object ActivityAttempt {
 
-  val CheckProgressDelay = 10.seconds
-
   sealed trait Msg
   case object Cancel extends Msg
   case class ResourceInstSpec(spec: Either[Status.Value, (Int, JsValue)]) extends Msg
@@ -53,7 +51,8 @@ object ActivityAttempt {
     attemptId: Int,
     activityType: String,
     activitySpec: JsValue,
-    resourceId: String
+    resourceId: String,
+    checkProgressDelay: FiniteDuration
   ): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       ctx.log.info(s"Starting ActivityAttempt ${ctx.self}...")
@@ -85,7 +84,7 @@ object ActivityAttempt {
           if (attemptR.status == Status.Pending) database.sync(query.setWaiting())
           resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
           ctx.log.info(s"${ctx.self} became waiting")
-          waiting(ps, resourceMgr, activityType, activitySpec)
+          waiting(ps, resourceMgr, activityType, activitySpec, checkProgressDelay)
         case Status.Running =>
           val resourceInstInfo = for {
             resourceInstAttempt <- attemptR.resourceInstanceAttempt
@@ -125,7 +124,8 @@ object ActivityAttempt {
                     ps,
                     resourceInst.instanceAttempt,
                     activityIO,
-                    attemptR.attemptSpec.get
+                    attemptR.attemptSpec.get,
+                    checkProgressDelay
                   )
                 }
               )
@@ -145,7 +145,8 @@ object ActivityAttempt {
     ps: Params,
     resourceMgr: ActorRef[ResourceMgr.Msg],
     activityType: String,
-    activitySpec: JsValue
+    activitySpec: JsValue,
+    checkProgressDelay: FiniteDuration
   ): Behavior[Msg] =
     Behaviors.receiveMessage {
       case Cancel =>
@@ -181,12 +182,12 @@ object ActivityAttempt {
                 terminate(ps, Status.Failed)
               case Right((activityIO, attemptSpec)) =>
                 ps.database.sync(ps.query.setRunning(ps.resourceId, resourceInst, attemptSpec))
-                running(ps, resourceInst, activityIO, attemptSpec)
+                running(ps, resourceInst, activityIO, attemptSpec, checkProgressDelay)
             }
 
           // Resource not ready yet
           case Left(Status.Pending) =>
-            ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
+            ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
             Behaviors.same
 
           // Resource down for unknown reason, cancel the activity?
@@ -206,9 +207,10 @@ object ActivityAttempt {
     ps: Params,
     resourceInstance: Int,
     activityIO: ActivityIO,
-    attemptSpec: JsValue
+    attemptSpec: JsValue,
+    checkProgressDelay: FiniteDuration
   ): Behavior[Msg] = {
-    ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
+    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
     Behaviors.receiveMessage {
       case Cancel =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Cancel")
@@ -233,7 +235,7 @@ object ActivityAttempt {
             ps.database.sync(ps.query.setTerminated(status, ""))
             terminate(ps, status)
           case Right(status) =>
-            ps.timers.startSingleTimer(CheckProgress, CheckProgressDelay)
+            ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
             Behaviors.same
         }
     }

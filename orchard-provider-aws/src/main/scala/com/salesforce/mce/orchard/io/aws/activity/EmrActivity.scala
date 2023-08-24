@@ -51,36 +51,38 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
     Json.toJson(stepIds)
   }
 
-  private def getProgress(steps: Seq[String]) = {
+  private def getProgress(steps: Seq[String]): Either[Throwable, Status.Value] = {
     val client = Client.emr()
-    val statuses = steps
-      .map { stepId =>
-        client
-          .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())
-          .step()
-          .status()
-          .state()
-      }
-      .retry()
-
-    if (statuses.forall(ss => ss == StepState.COMPLETED)) {
-      Status.Finished
-    } else if (statuses.contains(StepState.FAILED)) {
-      Status.Failed
-    } else if (statuses.contains(StepState.CANCELLED)) {
-      // when EMR cluster terminate with error, the StepState is CANCELLED, return Fail so new attempts could be made
-      Status.Failed
-    } else {
-      Status.Running
+    val statuses = retryToEither {
+      steps
+        .map { stepId =>
+          client
+            .describeStep(DescribeStepRequest.builder().clusterId(clusterId).stepId(stepId).build())
+            .step()
+            .status()
+            .state()
+        }
     }
 
+    statuses.map { ss =>
+      if (ss.forall(ss => ss == StepState.COMPLETED)) {
+        Status.Finished
+      } else if (ss.contains(StepState.FAILED)) {
+        Status.Failed
+      } else if (ss.contains(StepState.CANCELLED)) {
+        // when EMR cluster terminate with error, the StepState is CANCELLED, return Fail so new attempts could be made
+        Status.Failed
+      } else {
+        Status.Running
+      }
+    }
   }
 
   override def getProgress(spec: JsValue): Either[Throwable, Status.Value] = spec
     .validate[Seq[String]]
     .fold(
       invalid => Left(InvalidJsonException.raise(invalid)),
-      valid => Right(getProgress(valid))
+      valid => getProgress(valid)
     )
 
   private def terminate(steps: Seq[String]) = {

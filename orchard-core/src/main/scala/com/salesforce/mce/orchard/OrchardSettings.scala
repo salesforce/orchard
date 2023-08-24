@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard
 
+import scala.jdk.DurationConverters._
+
 import com.typesafe.config.{Config, ConfigFactory}
 
 class OrchardSettings private (config: Config) {
@@ -14,6 +16,8 @@ class OrchardSettings private (config: Config) {
   def slickDatabaseConf = config.getConfig("jdbc")
 
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
+
+  val checkProgressDelay = config.getDuration("activity.checkProgressDelay").toScala
 
 }
 
