@@ -61,12 +61,8 @@ object ResourceMgr {
     // here we make all invalid input to default 8 hours, the input should do validation before
     // saving them to DB
     val terminateAfterDuration: FiniteDuration =
-    try {
-      (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
-    }
-    catch {
-      case e: Exception => 8.hour
-    }
+      try { (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration] }
+      catch { case e: Exception => 8.hour }
     val ps = Params(
       ctx,
       database,
@@ -118,6 +114,7 @@ object ResourceMgr {
 
       case sts => finished(ps, sts)
     }
+    
   }
 
   def idle(
