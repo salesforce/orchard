@@ -61,7 +61,7 @@ object WorkflowMgr {
 
       val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
         rscId -> ctx.spawn(
-          ResourceMgr(database, orchardSettings, ctx.self, workflowId, rscId),
+          ResourceMgr(database, ctx.self, workflowId, rscId),
           s"rsc-$rscId"
         )
       }.toMap
