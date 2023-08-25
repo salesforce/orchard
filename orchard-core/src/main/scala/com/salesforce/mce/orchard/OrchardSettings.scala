@@ -19,6 +19,8 @@ class OrchardSettings private (config: Config) {
 
   val checkProgressDelay = config.getDuration("activity.checkProgressDelay").toScala
 
+  val resourceReattemptDelay = config.getDuration("resource.reattemptDelay").toScala
+
 }
 
 object OrchardSettings {

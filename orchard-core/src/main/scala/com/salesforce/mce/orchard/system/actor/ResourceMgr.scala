@@ -8,11 +8,10 @@
 package com.salesforce.mce.orchard.system.actor
 
 import scala.concurrent.duration._
-
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
+import com.salesforce.mce.orchard.OrchardSettings
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
-
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
@@ -23,6 +22,7 @@ object ResourceMgr {
   sealed trait Msg
 
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
+  case class CreateResourceInst(replyTo: ActorRef[ResourceInstSpecRsp], instId: Int) extends Msg
   case class ResourceInstSpecRsp(spec: Either[Status.Value, (Int, JsValue)])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
   case class InactiveResourceInstance(
@@ -44,80 +44,90 @@ object ResourceMgr {
     maxAttempt: Int,
     rscType: String,
     rscSpec: JsValue,
-    terminateAfter: FiniteDuration
+    terminateAfter: FiniteDuration,
+    timers: TimerScheduler[ResourceMgr.Msg]
   )
 
   def apply(
     database: OrchardDatabase,
+    orchardSettings: OrchardSettings,
     workflowMgr: ActorRef[WorkflowMgr.Msg],
     workflowId: String,
     resourceId: String
   ): Behavior[Msg] = Behaviors.setup { ctx =>
-    ctx.log.info(s"Starting ResourceMgr ${ctx.self}")
+    Behaviors.withTimers { timers =>
+      ctx.log.info(s"Starting ResourceMgr ${ctx.self}")
 
-    val resourceQuery = new ResourceQuery(workflowId, resourceId)
-    val resourceR = database.sync(resourceQuery.get()).get
+      val resourceQuery = new ResourceQuery(workflowId, resourceId)
+      val resourceR = database.sync(resourceQuery.get()).get
 
-    // here we make all invalid input to default 8 hours, the input should do validation before
-    // saving them to DB
-    val terminateAfterDuration: FiniteDuration =
-      try { (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration] }
-      catch { case e: Exception => 8.hour }
-    val ps = Params(
-      ctx,
-      database,
-      resourceQuery,
-      workflowMgr,
-      workflowId,
-      resourceId,
-      resourceR.name,
-      resourceR.maxAttempt,
-      resourceR.resourceType,
-      resourceR.resourceSpec,
-      terminateAfterDuration
-    )
+      // here we make all invalid input to default 8 hours, the input should do validation before
+      // saving them to DB
+      val terminateAfterDuration: FiniteDuration =
+      try {
+        (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
+      }
+      catch {
+        case e: Exception => 8.hour
+      }
+      val ps = Params(
+        ctx,
+        database,
+        resourceQuery,
+        workflowMgr,
+        workflowId,
+        resourceId,
+        resourceR.name,
+        resourceR.maxAttempt,
+        resourceR.resourceType,
+        resourceR.resourceSpec,
+        terminateAfterDuration,
+        timers
+      )
 
-    resourceR.status match {
-      case Status.Pending =>
-        idle(ps)
+      resourceR.status match {
+        case Status.Pending =>
+          idle(orchardSettings, ps)
 
-      case Status.Running =>
-        val resourceInsts = database.sync(resourceQuery.instances())
-        val lastInstOpt = resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
-        val instIdEith = lastInstOpt match {
-          case Some(lastInst) =>
-            if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
-              Right(lastInst.instanceAttempt + 1)
-            } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running) {
-              Right(lastInst.instanceAttempt)
-            } else {
-              Left(lastInst.status)
-            }
-          case None =>
-            Right(1)
-        }
+        case Status.Running =>
+          val resourceInsts = database.sync(resourceQuery.instances())
+          val lastInstOpt = resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
+          val instIdEith = lastInstOpt match {
+            case Some(lastInst) =>
+              if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
+                Right(lastInst.instanceAttempt + 1)
+              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running) {
+                Right(lastInst.instanceAttempt)
+              } else {
+                Left(lastInst.status)
+              }
+            case None =>
+              Right(1)
+          }
 
-        val result = for {
-          instId <- instIdEith
-          rscInst <- spawnResourceInstance(
-            ctx,
-            database,
-            ps,
-            instId
-          )
-        } yield running(ps, rscInst, instId)
+          val result = for {
+            instId <- instIdEith
+            rscInst <- spawnResourceInstance(
+              ctx,
+              database,
+              ps,
+              instId
+            )
+          } yield running(orchardSettings, ps, rscInst, instId)
 
-        result.left.map { sts =>
-          database.sync(resourceQuery.setTerminated(sts))
-          finished(ps, sts)
-        }.merge
+          result.left.map { sts =>
+            database.sync(resourceQuery.setTerminated(sts))
+            finished(ps, sts)
+          }.merge
 
-      case sts => finished(ps, sts)
+        case sts => finished(ps, sts)
+      }
+
     }
-
   }
 
   def idle(
+    orchardSettings: OrchardSettings,
     ps: Params
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
@@ -125,7 +135,11 @@ object ResourceMgr {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received GetResourceInstSpec($replyTo)")
         ps.database.sync(ps.resourceQuery.setRun())
-        val instId = 1
+        ps.ctx.self ! CreateResourceInst(replyTo, 1)
+        Behaviors.same
+
+      case CreateResourceInst(replyTo, instId) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (idle) received CreateResourceInst($replyTo, $instId)")
         spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
@@ -133,7 +147,7 @@ object ResourceMgr {
             finished(ps, sts)
           case Right(rscInst) =>
             rscInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
+            running(orchardSettings, ps, rscInst, instId)
         }
 
       // no resource instance should exist yet, this is unexpected
@@ -158,6 +172,7 @@ object ResourceMgr {
     }
 
   def running(
+    orchardSettings: OrchardSettings,
     ps: Params,
     resourceInst: ActorRef[ResourceInstance.Msg],
     currentInstId: Int
@@ -167,6 +182,17 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
         Behaviors.same
+      case CreateResourceInst(replyTo, instId) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received CreateResourceInst($replyTo, $instId)")
+        spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
+          case Left(sts) =>
+            ps.database.sync(ps.resourceQuery.setTerminated(sts))
+            replyTo ! ResourceInstSpecRsp(Left(sts))
+            finished(ps, sts)
+          case Right(rscInst) =>
+            ps.ctx.self ! GetResourceInstSpec(replyTo)
+            running(orchardSettings, ps, rscInst, instId)
+        }
       case ResourceInstanceFinished(Status.Timeout) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
         ps.database.sync(ps.resourceQuery.setTerminated(Status.Timeout))
@@ -195,15 +221,8 @@ object ResourceMgr {
         } else {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance
-          spawnResourceInstance(ps.ctx, ps.database, ps, newInstId) match {
-            case Left(sts) =>
-              ps.database.sync(ps.resourceQuery.setTerminated(sts))
-              replyTo ! ResourceInstSpecRsp(Left(failureStatus))
-              finished(ps, sts)
-            case Right(rscInst) =>
-              ps.ctx.self ! GetResourceInstSpec(replyTo)
-              running(ps, rscInst, newInstId)
-          }
+          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), orchardSettings.resourceReattemptDelay)
+          Behaviors.same
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
@@ -226,6 +245,9 @@ object ResourceMgr {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (finished) received GetResourceInstSpec($replyTo)")
         replyTo ! ResourceInstSpecRsp(Left(status))
+        Behaviors.same
+      case CreateResourceInst(replyTo, instId) =>
+        ps.ctx.log.error(s"${ps.ctx.self} (finished) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
         Behaviors.same
       case ResourceInstanceFinished(sts) =>
         ps.ctx.log.error(
@@ -256,6 +278,9 @@ object ResourceMgr {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received GetResourceInstSpec(${replyTo})")
         replyTo ! ResourceInstSpecRsp(Left(status))
+        Behaviors.same
+      case CreateResourceInst(replyTo, instId) =>
+        ps.ctx.log.error(s"${ps.ctx.self} (terminating) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
         Behaviors.same
       case ResourceInstanceFinished(sts) =>
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
