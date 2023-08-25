@@ -114,7 +114,7 @@ object ResourceMgr {
 
       case sts => finished(ps, sts)
     }
-    
+
   }
 
   def idle(
