@@ -12,7 +12,7 @@ import javax.inject._
 import scala.concurrent.ExecutionContext
 
 import play.api.Logging
-import play.api.libs.json.{JsNumber, JsObject}
+import play.api.libs.json.{JsArray, JsNumber, JsObject, Json}
 import play.api.mvc._
 
 import com.salesforce.mce.orchard.db.WorkflowQuery
@@ -33,6 +33,19 @@ class StatsController @Inject() (
       .async(WorkflowQuery.countByStatus(days.getOrElse(365)))
       .map { rs =>
         Results.Ok(JsObject(rs.map { case (k, v) => k.toString() -> JsNumber(v) }))
+      }
+  }
+
+  def daily(days: Option[Int]) = userAction.async {
+    db.orchardDB.async(WorkflowQuery.dailyCounts(days.getOrElse(30)))
+      .map { rs =>
+        Results.Ok(JsArray(rs.map { case (d, s, c) =>
+          Json.obj(
+            "date" -> d,
+            "status" -> s,
+            "count" -> c
+          )
+        }))
       }
   }
 

@@ -7,9 +7,12 @@
 
 package com.salesforce.mce.orchard.db
 
+import java.time.{LocalDate, LocalDateTime}
+
+import slick.jdbc.GetResult
 import slick.jdbc.PostgresProfile.api._
+
 import com.salesforce.mce.orchard.model.Status
-import java.time.LocalDateTime
 
 class WorkflowQuery(workflowId: String) {
 
@@ -114,6 +117,23 @@ object WorkflowQuery {
       .groupBy(_.status)
       .map { case (sts, rs) => sts -> rs.length }
       .result
+  }
+
+  implicit val countsConverter: GetResult[(LocalDate, Status.Value, Int)] = GetResult(r => (
+    r.nextTimestamp().toLocalDateTime().toLocalDate(),
+    Status.withName(r.nextString()),
+    r.nextInt()
+  ))
+
+  def dailyCounts(window: Int): DBIO[Seq[(LocalDate, Status.Value, Int)]] = {
+    val fromDate = LocalDateTime.now().minusDays(window)
+
+    sql"""
+      SELECT DATE(activated_at), status, count(*)
+      FROM workflows
+      WHERE activated_at > '#${fromDate.toString()}'::timestamp without time zone
+      GROUP BY DATE(activated_at), status
+    """.as[(LocalDate, Status.Value, Int)]
   }
 
 }
