@@ -8,10 +8,12 @@
 package com.salesforce.mce.orchard.system.actor
 
 import scala.concurrent.duration._
+
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
-import com.salesforce.mce.orchard.OrchardSettings
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
+
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
