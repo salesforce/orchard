@@ -49,4 +49,17 @@ class StatsController @Inject() (
       }
   }
 
+  def pattern(days: Option[Int]) = userAction.async {
+    db.orchardDB.async(WorkflowQuery.hourlyPattern(days.getOrElse(30)))
+      .map { rs =>
+        Results.Ok(JsArray(rs.map { case (d, s, c) =>
+          Json.obj(
+            "dow" -> d,
+            "hour" -> s,
+            "count" -> c
+          )
+        }))
+      }
+  }
+
 }

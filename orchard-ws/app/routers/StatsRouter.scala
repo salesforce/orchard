@@ -18,6 +18,7 @@ class StatsRouter @Inject() (ctrl: StatsController) extends SimpleRouter {
   override def routes: Router.Routes = {
     case GET(p"/counts" ? q_o"days=${int(days)}") => ctrl.count(days)
     case GET(p"/daily" ? q_o"days=${int(days)}") => ctrl.daily(days)
+    case GET(p"/pattern" ? q_o"days=${int(days)}") => ctrl.pattern(days)
   }
 
 }

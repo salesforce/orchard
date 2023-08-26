@@ -129,11 +129,24 @@ object WorkflowQuery {
     val fromDate = LocalDateTime.now().minusDays(window)
 
     sql"""
-      SELECT DATE(activated_at), status, count(*)
+      SELECT DATE(activated_at) "date", status, count(*)
       FROM workflows
       WHERE activated_at > '#${fromDate.toString()}'::timestamp without time zone
       GROUP BY DATE(activated_at), status
+      ORDER BY "date", status
     """.as[(LocalDate, Status.Value, Int)]
+  }
+
+  def hourlyPattern(window: Int): DBIO[Seq[(Int, Int, Int)]] = {
+    val fromDate = LocalDateTime.now().minusDays(window)
+
+    sql"""
+      SELECT EXTRACT(DOW FROM activated_at) "dow", EXTRACT(HOUR FROM activated_at) "hour", count(*)
+      FROM workflows
+      WHERE activated_at > '#${fromDate.toString()}'::timestamp without time zone
+      GROUP BY EXTRACT(DOW FROM activated_at), EXTRACT(HOUR FROM activated_at) 
+      ORDER BY "dow", "hour"
+    """.as[(Int, Int, Int)]
   }
 
 }
