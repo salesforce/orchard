@@ -16,8 +16,4 @@ object RetryHelper extends Retryable with ExponentialBackoffAndJitter {
 
   def retryToEither[A](action: => A) = Try(action.retry()).toEither
 
-  override def base: Int = 30000
-
-  override def cap: Int = 300000
-
 }
