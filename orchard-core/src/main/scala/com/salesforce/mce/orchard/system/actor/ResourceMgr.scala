@@ -66,8 +66,7 @@ object ResourceMgr {
       val terminateAfterDuration: FiniteDuration =
       try {
         (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
-      }
-      catch {
+      } catch {
         case e: Exception => 8.hour
       }
       val ps = Params(
@@ -181,16 +180,8 @@ object ResourceMgr {
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (running) received CreateResourceInst($replyTo, $instId)")
-        spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
-          case Left(sts) =>
-            ps.database.sync(ps.resourceQuery.setTerminated(sts))
-            replyTo ! ResourceInstSpecRsp(Left(sts))
-            finished(ps, sts)
-          case Right(rscInst) =>
-            ps.ctx.self ! GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
-        }
+        ps.ctx.log.error(s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        Behaviors.unhandled
       case ResourceInstanceFinished(Status.Timeout) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
         ps.database.sync(ps.resourceQuery.setTerminated(Status.Timeout))
