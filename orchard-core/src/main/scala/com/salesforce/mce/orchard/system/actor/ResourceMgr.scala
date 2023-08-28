@@ -133,11 +133,6 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received GetResourceInstSpec($replyTo)")
         ps.database.sync(ps.resourceQuery.setRun())
         val instId = 1
-        ps.ctx.self ! CreateResourceInst(replyTo, instId)
-        Behaviors.same
-
-      case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (idle) received CreateResourceInst($replyTo, $instId)")
         spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
@@ -147,6 +142,10 @@ object ResourceMgr {
             rscInst ! ResourceInstance.GetResourceInstSpec(replyTo)
             running(ps, rscInst, instId)
         }
+
+      case CreateResourceInst(replyTo, instId) =>
+        ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        Behaviors.unhandled
 
       // no resource instance should exist yet, this is unexpected
       case msg: ResourceInstanceFinished =>
