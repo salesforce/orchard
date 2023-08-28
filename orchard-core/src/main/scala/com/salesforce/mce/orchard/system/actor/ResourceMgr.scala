@@ -210,7 +210,7 @@ object ResourceMgr {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance
           ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), 10.minutes)
-          waiting(ps, resourceInst)
+          waiting(ps)
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
@@ -223,13 +223,11 @@ object ResourceMgr {
     }
 
   def waiting(
-    ps: Params,
-    resourceInst: ActorRef[ResourceInstance.Msg],
+    ps: Params
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received GetResourceInstSpec($replyTo)")
-        resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CreateResourceInst($replyTo, $instId)")
@@ -254,7 +252,6 @@ object ResourceMgr {
         Behaviors.unhandled
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Shutdown($status)")
-        resourceInst ! ResourceInstance.Shutdown(status)
         terminating(ps.ctx, ps, status)
     }
     .receiveSignal { case (actorContext, signal) =>
