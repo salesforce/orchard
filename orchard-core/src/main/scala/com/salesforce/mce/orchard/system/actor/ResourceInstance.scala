@@ -190,7 +190,7 @@ object ResourceInstance {
         )
         exp.getMessage()
     }
-    val failureStatus = if (status == Status.Finished) Status.Failed else status
+    val failureStatus = if (replyTo.nonEmpty && status == Status.Finished) Status.Failed else status
     ps.database.sync(ps.query.setTerminated(failureStatus, errorMsg))
     terminate(ps, failureStatus, replyTo)
   }
