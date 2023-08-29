@@ -228,6 +228,7 @@ object ResourceMgr {
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received GetResourceInstSpec($replyTo)")
+        ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 1.minutes)
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CreateResourceInst($replyTo, $instId)")
