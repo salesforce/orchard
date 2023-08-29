@@ -195,17 +195,14 @@ object ResourceMgr {
         ps.ctx.log.info(
           s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
-        // in case resource is terminated (normally) by external entities
-        val failureStatus = if (status == Status.Finished) Status.Failed else status
-
         // maybe the current instance is already a new one
         if (instId < currentInstId) {
           ps.ctx.self ! GetResourceInstSpec(replyTo)
           Behaviors.same
         } else if (currentInstId >= ps.maxAttempt) {
-          ps.database.sync(ps.resourceQuery.setTerminated(failureStatus))
-          replyTo ! ResourceInstSpecRsp(Left(failureStatus))
-          finished(ps, failureStatus)
+          ps.database.sync(ps.resourceQuery.setTerminated(status))
+          replyTo ! ResourceInstSpecRsp(Left(status))
+          finished(ps, status)
         } else {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance

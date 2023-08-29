@@ -190,8 +190,9 @@ object ResourceInstance {
         )
         exp.getMessage()
     }
-    ps.database.sync(ps.query.setTerminated(status, errorMsg))
-    terminate(ps, status, replyTo)
+    val failureStatus = if (status == Status.Finished) Status.Failed else status
+    ps.database.sync(ps.query.setTerminated(failureStatus, errorMsg))
+    terminate(ps, failureStatus, replyTo)
   }
 
   // We should not terminate resource instance actor as it may need to respond to pending queries
