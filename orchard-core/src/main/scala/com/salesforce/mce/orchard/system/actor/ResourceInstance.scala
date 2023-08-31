@@ -190,8 +190,14 @@ object ResourceInstance {
         )
         exp.getMessage()
     }
-    ps.database.sync(ps.query.setTerminated(status, errorMsg))
-    terminate(ps, status, replyTo)
+
+    // a) Proper resource termination msg after finished status should come from ResourceMgr that does not expect reply.
+    // b) Getting Finished during running as we shortcut resource Terminating to Finished status, which
+    // can lead to Terminated or Terminated with errors (Failed).
+    // c) resource could terminate normally by external users, and should be marked as failed.
+    val failureStatus = if (replyTo.nonEmpty && status == Status.Finished) Status.Failed else status
+    ps.database.sync(ps.query.setTerminated(failureStatus, errorMsg))
+    terminate(ps, failureStatus, replyTo)
   }
 
   // We should not terminate resource instance actor as it may need to respond to pending queries
