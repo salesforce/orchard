@@ -13,6 +13,7 @@ import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
 
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
@@ -51,6 +52,7 @@ object ResourceMgr {
 
   def apply(
     database: OrchardDatabase,
+    orchardSettings: OrchardSettings,
     workflowMgr: ActorRef[WorkflowMgr.Msg],
     workflowId: String,
     resourceId: String
@@ -86,7 +88,7 @@ object ResourceMgr {
 
       resourceR.status match {
         case Status.Pending =>
-          idle(ps)
+          idle(orchardSettings, ps)
 
         case Status.Running =>
           val resourceInsts = database.sync(resourceQuery.instances())
@@ -112,7 +114,7 @@ object ResourceMgr {
               ps,
               instId
             )
-          } yield running(ps, rscInst, instId)
+          } yield running(orchardSettings, ps, rscInst, instId)
 
           result.left.map { sts =>
             database.sync(resourceQuery.setTerminated(sts))
@@ -125,6 +127,7 @@ object ResourceMgr {
   }
 
   def idle(
+    orchardSettings: OrchardSettings,
     ps: Params
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
@@ -140,7 +143,7 @@ object ResourceMgr {
             finished(ps, sts)
           case Right(rscInst) =>
             rscInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
+            running(orchardSettings, ps, rscInst, instId)
         }
 
       case CreateResourceInst(replyTo, instId) =>
@@ -169,6 +172,7 @@ object ResourceMgr {
     }
 
   def running(
+    orchardSettings: OrchardSettings,
     ps: Params,
     resourceInst: ActorRef[ResourceInstance.Msg],
     currentInstId: Int
@@ -206,8 +210,8 @@ object ResourceMgr {
         } else {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance
-          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), 5.minutes)
-          waiting(ps)
+          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), orchardSettings.resourceReattemptDelay)
+          waiting(orchardSettings, ps)
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
@@ -220,6 +224,7 @@ object ResourceMgr {
     }
 
   def waiting(
+    orchardSettings: OrchardSettings,
     ps: Params
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
@@ -236,7 +241,7 @@ object ResourceMgr {
             finished(ps, sts)
           case Right(rscInst) =>
             ps.ctx.self ! GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
+            running(orchardSettings, ps, rscInst, instId)
         }
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
