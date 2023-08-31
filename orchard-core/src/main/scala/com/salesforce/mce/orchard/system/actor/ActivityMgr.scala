@@ -7,6 +7,8 @@
 
 package com.salesforce.mce.orchard.system.actor
 
+import scala.concurrent.duration.FiniteDuration
+
 import akka.actor.typed.scaladsl._
 import akka.actor.typed.{ActorRef, Behavior}
 import play.api.libs.json.JsValue
@@ -40,11 +42,11 @@ object ActivityMgr {
 
   def apply(
     workflowMgr: ActorRef[WorkflowMgr.Msg],
+    orchardSettings: OrchardSettings,
     database: OrchardDatabase,
     workflowId: String,
     activityId: String,
-    resourceMgr: ActorRef[ResourceMgr.Msg],
-    orchardSettings: OrchardSettings
+    resourceMgr: ActorRef[ResourceMgr.Msg]
   ): Behavior[Msg] = Behaviors.setup { ctx =>
     ctx.log.info(s"Starting ActivityMgr ${ctx.self}...")
     val activityQuery = new ActivityQuery(workflowId, activityId)
@@ -68,17 +70,17 @@ object ActivityMgr {
       .sync(activityQuery.get())
       .map { r =>
         params.ctx.log.info(s"${ctx.self} init with status ${r.status}")
-        init(params, r.status, orchardSettings)
+        init(params, r.status, orchardSettings.checkProgressDelay)
       }
       .getOrElse(terminate(params, Status.Failed))
 
   }
 
-  private def init(ps: Params, status: Status.Value, orchardSettings: OrchardSettings): Behavior[Msg] = status match {
+  private def init(ps: Params, status: Status.Value, checkProgressDelay: FiniteDuration): Behavior[Msg] = status match {
 
     // this is the state if everything follows the happy path
     case Status.Pending =>
-      idle(ps, orchardSettings)
+      idle(ps, checkProgressDelay)
 
     // activity started by some other actor, but for some reason, it no longer supervises the
     // activity
@@ -117,11 +119,11 @@ object ActivityMgr {
               ps.activityType,
               ps.activitySpec,
               ps.resourceId,
-              orchardSettings.checkProgressDelay
+              checkProgressDelay
             ),
             s"attempt-${attmptId}"
           )
-          running(ps, attmptId, attmpt, orchardSettings)
+          running(ps, attmptId, attmpt, checkProgressDelay)
         }
       )
     case other =>
@@ -134,7 +136,7 @@ object ActivityMgr {
     Behaviors.stopped
   }
 
-  private def idle(ps: Params, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors
+  private def idle(ps: Params, checkProgressDelay: FiniteDuration): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case Start =>
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received Start")
@@ -152,11 +154,11 @@ object ActivityMgr {
             ps.activityType,
             ps.activitySpec,
             ps.resourceId,
-            orchardSettings.checkProgressDelay
+            checkProgressDelay
           ),
           s"attempt-${attmptId}"
         )
-        running(ps, attmptId, attempt, orchardSettings)
+        running(ps, attmptId, attempt, checkProgressDelay)
       case CascadeFail =>
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received CascadeFail")
         val sts = Status.CascadeFailed
@@ -180,7 +182,7 @@ object ActivityMgr {
     ps: Params,
     attemptId: Int,
     attempt: ActorRef[ActivityAttempt.Msg],
-    orchardSettings: OrchardSettings
+    checkProgressDelay: FiniteDuration
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case Start =>
@@ -216,11 +218,11 @@ object ActivityMgr {
               ps.activityType,
               ps.activitySpec,
               ps.resourceId,
-              orchardSettings.checkProgressDelay
+              checkProgressDelay
             ),
             s"attempt-${newAttmptId}"
           )
-          running(ps, newAttmptId, newAttempt, orchardSettings)
+          running(ps, newAttmptId, newAttempt, checkProgressDelay)
         } else {
           ps.database.sync(ps.activityQuery.setTerminated(sts))
           terminate(ps, sts)

@@ -61,7 +61,7 @@ object WorkflowMgr {
 
       val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
         rscId -> ctx.spawn(
-          ResourceMgr(database, orchardSettings, ctx.self, workflowId, rscId),
+          ResourceMgr(orchardSettings, database, ctx.self, workflowId, rscId),
           s"rsc-$rscId"
         )
       }.toMap
@@ -177,7 +177,7 @@ object WorkflowMgr {
     val activityMgrs = (ps.activityGraph.roots -- ps.activityMgrs.keySet).map { actId =>
       val rscMgr = ps.resourceMgrs(ps.activityResources(actId))
       val actMgr = ctx.spawn(
-        ActivityMgr(ctx.self, database, ps.workflowId, actId, rscMgr, orchardSettings),
+        ActivityMgr(ctx.self, orchardSettings, database, ps.workflowId, actId, rscMgr),
         s"act-$actId"
       )
       val activityMsg = lastActStatus match {
