@@ -206,7 +206,7 @@ object ResourceMgr {
         } else {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance
-          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), 10.minutes)
+          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), 5.minutes)
           waiting(ps)
         }
       case Shutdown(status) =>
@@ -240,7 +240,7 @@ object ResourceMgr {
         }
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
-          s"${ps.ctx.self} (waiting) received UNEXPECTED ResourceInstanceFinished($status, None)"
+          s"${ps.ctx.self} (waiting) received UNEXPECTED ResourceInstanceFinished($status)"
         )
         Behaviors.unhandled
       case InactiveResourceInstance(instId, status, replyTo) =>
