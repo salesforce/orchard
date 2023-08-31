@@ -97,7 +97,7 @@ object ResourceMgr {
             case Some(lastInst) =>
               if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
                 Right(lastInst.instanceAttempt + 1)
-              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running) {
+              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending) {
                 Right(lastInst.instanceAttempt)
               } else {
                 Left(lastInst.status)
