@@ -13,6 +13,7 @@ import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
 
+import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceQuery}
 import com.salesforce.mce.orchard.io.ResourceIO
 import com.salesforce.mce.orchard.model.Status
@@ -50,6 +51,7 @@ object ResourceMgr {
   )
 
   def apply(
+    orchardSettings: OrchardSettings,
     database: OrchardDatabase,
     workflowMgr: ActorRef[WorkflowMgr.Msg],
     workflowId: String,
@@ -86,7 +88,7 @@ object ResourceMgr {
 
       resourceR.status match {
         case Status.Pending =>
-          idle(ps)
+          idle(ps, orchardSettings.resourceReattemptDelay)
 
         case Status.Running =>
           val resourceInsts = database.sync(resourceQuery.instances())
@@ -95,7 +97,7 @@ object ResourceMgr {
             case Some(lastInst) =>
               if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
                 Right(lastInst.instanceAttempt + 1)
-              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running) {
+              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending) {
                 Right(lastInst.instanceAttempt)
               } else {
                 Left(lastInst.status)
@@ -112,7 +114,7 @@ object ResourceMgr {
               ps,
               instId
             )
-          } yield running(ps, rscInst, instId)
+          } yield running(ps, orchardSettings.resourceReattemptDelay, rscInst, instId)
 
           result.left.map { sts =>
             database.sync(resourceQuery.setTerminated(sts))
@@ -125,7 +127,8 @@ object ResourceMgr {
   }
 
   def idle(
-    ps: Params
+    ps: Params,
+    resourceAttemptDelay: FiniteDuration
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
 
@@ -140,7 +143,7 @@ object ResourceMgr {
             finished(ps, sts)
           case Right(rscInst) =>
             rscInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
+            running(ps, resourceAttemptDelay, rscInst, instId)
         }
 
       case CreateResourceInst(replyTo, instId) =>
@@ -170,6 +173,7 @@ object ResourceMgr {
 
   def running(
     ps: Params,
+    resourceAttemptDelay: FiniteDuration,
     resourceInst: ActorRef[ResourceInstance.Msg],
     currentInstId: Int
   ): Behavior[Msg] = Behaviors
@@ -206,8 +210,8 @@ object ResourceMgr {
         } else {
           val newInstId = currentInstId + 1
           // create a new instance upon failure and deligate the response to the new instance
-          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), 5.minutes)
-          waiting(ps)
+          ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), resourceAttemptDelay)
+          waiting(ps, resourceAttemptDelay)
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
@@ -220,7 +224,8 @@ object ResourceMgr {
     }
 
   def waiting(
-    ps: Params
+    ps: Params,
+    resourceAttemptDelay: FiniteDuration
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
@@ -236,7 +241,7 @@ object ResourceMgr {
             finished(ps, sts)
           case Right(rscInst) =>
             ps.ctx.self ! GetResourceInstSpec(replyTo)
-            running(ps, rscInst, instId)
+            running(ps, resourceAttemptDelay, rscInst, instId)
         }
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
