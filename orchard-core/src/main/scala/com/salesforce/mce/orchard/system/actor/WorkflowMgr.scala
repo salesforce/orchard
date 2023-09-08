@@ -96,7 +96,7 @@ object WorkflowMgr {
     .receiveMessage[Msg] {
 
       case ActivityCompleted(activityId, actStatus) =>
-        ctx.log.info(s"${ctx.self} (active) recieved ActivityCompleted($activityId, $actStatus)")
+        ctx.log.info(s"${ctx.self} (active) received ActivityCompleted($activityId, $actStatus)")
 
         // trigger the necessary action
         ps.actionMgr.foreach(acnMgr => acnMgr ! ActionMgr.RunActions(activityId, actStatus))
