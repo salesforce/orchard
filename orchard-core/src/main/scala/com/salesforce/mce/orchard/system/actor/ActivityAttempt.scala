@@ -53,93 +53,94 @@ object ActivityAttempt {
     activitySpec: JsValue,
     resourceId: String,
     checkProgressDelay: FiniteDuration
-  ): Behavior[Msg] = Behaviors.setup { ctx =>
-    Behaviors.withTimers { timers =>
-      ctx.log.info(s"Starting ActivityAttempt ${ctx.self}...")
-      val query = new ActivityAttemptQuery(workflowId, activityId, attemptId)
+  ): Behavior[Msg] = Behaviors.supervise {
+    Behaviors.setup { ctx: ActorContext[Msg] =>
+      Behaviors.withTimers { timers: TimerScheduler[Msg] =>
+        ctx.log.info(s"Starting ActivityAttempt ${ctx.self}...")
+        val query = new ActivityAttemptQuery(workflowId, activityId, attemptId)
 
-      val attemptR = database
-        .sync(query.get())
-        .getOrElse(database.sync(query.create()(ExecutionContext.global)))
+        val attemptR = database
+          .sync(query.get())
+          .getOrElse(database.sync(query.create()(ExecutionContext.global)))
 
-      val rscInstSpecAdapter =
-        ctx.messageAdapter[ResourceMgr.ResourceInstSpecRsp](r => ResourceInstSpec(r.spec))
+        val rscInstSpecAdapter =
+          ctx.messageAdapter[ResourceMgr.ResourceInstSpecRsp](r => ResourceInstSpec(r.spec))
 
-      val ps = Params(
-        ctx,
-        activityMgr,
-        database,
-        query,
-        workflowId,
-        activityId,
-        activityName,
-        attemptId,
-        resourceId,
-        rscInstSpecAdapter,
-        timers
-      )
+        val ps = Params(
+          ctx,
+          activityMgr,
+          database,
+          query,
+          workflowId,
+          activityId,
+          activityName,
+          attemptId,
+          resourceId,
+          rscInstSpecAdapter,
+          timers
+        )
 
-      attemptR.status match {
-        case Status.Pending | Status.Activating =>
-          if (attemptR.status == Status.Pending) database.sync(query.setWaiting())
-          resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
-          ctx.log.info(s"${ctx.self} became waiting")
-          waiting(ps, resourceMgr, activityType, activitySpec, checkProgressDelay)
-        case Status.Running =>
-          val resourceInstInfo = for {
-            resourceInstAttempt <- attemptR.resourceInstanceAttempt
-            resourceInst <- database
-              .sync(
-                new ResourceInstanceQuery(
-                  workflowId,
-                  resourceId,
-                  resourceInstAttempt
-                ).get()
-              )
-            instSpec <- resourceInst.instanceSpec
-          } yield (resourceInst, instSpec)
-
-          resourceInstInfo match {
-            case Some((resourceInst, instSpec)) =>
-              ActivityIO(
-                ActivityIO.Conf(
-                  workflowId,
-                  activityId,
-                  activityName,
-                  attemptId,
-                  activityType,
-                  activitySpec,
-                  instSpec
+        attemptR.status match {
+          case Status.Pending | Status.Activating =>
+            if (attemptR.status == Status.Pending) database.sync(query.setWaiting())
+            resourceMgr ! ResourceMgr.GetResourceInstSpec(rscInstSpecAdapter)
+            ctx.log.info(s"${ctx.self} became waiting")
+            waiting(ps, resourceMgr, activityType, activitySpec, checkProgressDelay)
+          case Status.Running =>
+            val resourceInstInfo = for {
+              resourceInstAttempt <- attemptR.resourceInstanceAttempt
+              resourceInst <- database
+                .sync(
+                  new ResourceInstanceQuery(
+                    workflowId,
+                    resourceId,
+                    resourceInstAttempt
+                  ).get()
                 )
-              ).fold(
-                invalid => {
-                  ctx.log.error(
-                    s"${ctx.self} invalid activityIO: ${InvalidJsonException.raise(invalid)}"
-                  )
-                  terminate(ps, Status.Failed)
-                },
-                activityIO => {
-                  ctx.log.info(s"${ctx.self} became running")
-                  running(
-                    ps,
-                    resourceInst.instanceAttempt,
-                    activityIO,
-                    attemptR.attemptSpec.get,
-                    checkProgressDelay
-                  )
-                }
-              )
-            case None =>
-              ctx.log.error(s"${ctx.self} Running activity attemt missing resource instance info")
-              terminate(ps, Status.Failed)
-          }
+              instSpec <- resourceInst.instanceSpec
+            } yield (resourceInst, instSpec)
 
-        case sts =>
-          terminate(ps, sts)
+            resourceInstInfo match {
+              case Some((resourceInst, instSpec)) =>
+                ActivityIO(
+                  ActivityIO.Conf(
+                    workflowId,
+                    activityId,
+                    activityName,
+                    attemptId,
+                    activityType,
+                    activitySpec,
+                    instSpec
+                  )
+                ).fold(
+                  invalid => {
+                    ctx.log.error(
+                      s"${ctx.self} invalid activityIO: ${InvalidJsonException.raise(invalid)}"
+                    )
+                    terminate(ps, Status.Failed)
+                  },
+                  activityIO => {
+                    ctx.log.info(s"${ctx.self} became running")
+                    running(
+                      ps,
+                      resourceInst.instanceAttempt,
+                      activityIO,
+                      attemptR.attemptSpec.get,
+                      checkProgressDelay
+                    )
+                  }
+                )
+              case None =>
+                ctx.log.error(s"${ctx.self} Running activity attemt missing resource instance info")
+                terminate(ps, Status.Failed)
+            }
+
+          case sts =>
+            terminate(ps, sts)
+        }
       }
     }
-
-  }
+  }.onFailure(SupervisorStrategy.restart)
 
   def waiting(
     ps: Params,
