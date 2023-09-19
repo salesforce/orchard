@@ -18,7 +18,7 @@ val playJson          = "com.typesafe.play"       %% "play-json"                
 val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
 val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
 
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.16" % Test
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.17" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
 val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.8"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
@@ -29,7 +29,7 @@ val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"   
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  scalaVersion := "2.13.11",
+  scalaVersion := "2.13.12",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(
