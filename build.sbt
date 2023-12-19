@@ -20,7 +20,7 @@ val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.17" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.8"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.14"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -84,10 +84,10 @@ lazy val orchardWS = (project in file("orchard-ws")).
     ),
     dependencyOverrides ++= Seq(
       // the transitive jackson dependencies from play framework on has security vulnerabilities
-      "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.2",
-      "com.fasterxml.jackson.core" % "jackson-core" % "2.15.2",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2",
-      "com.google.guava" % "guava" % "32.1.1-jre",
+      "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.3",
+      "com.fasterxml.jackson.core" % "jackson-core" % "2.15.3",
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.3",
+      "com.google.guava" % "guava" % "32.1.3-jre",
       "io.netty" % "netty-codec" % "4.1.100.Final"
     )
   ).
