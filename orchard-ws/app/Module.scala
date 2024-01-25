@@ -8,7 +8,7 @@
 import java.time.Clock
 
 import com.google.inject.AbstractModule
-import play.api.libs.concurrent.AkkaGuiceSupport
+import play.api.libs.concurrent.PekkoGuiceSupport
 
 import services._
 import tasks.AuthSettingReloadTask
@@ -23,7 +23,7 @@ import utils.{Authorization, AuthorizationSettings}
  * adding `play.modules.enabled` settings to the `application.conf`
  * configuration file.
  */
-class Module extends AbstractModule with AkkaGuiceSupport {
+class Module extends AbstractModule with PekkoGuiceSupport {
 
   override def configure() = {
     // Use the system clock as the default implementation of Clock

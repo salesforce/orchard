@@ -28,7 +28,7 @@
   <logger name="application" level="DEBUG" />
   <logger name="com.salesforce.mce.orchard.system" level="INFO" />
   <!-- this is the root actor created by play -->
-  <logger name="akka.actor.ActorCell" level="INFO" />
+  <logger name="org.apache.pekko.actor.ActorCell" level="INFO" />
 
   <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
   <logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF" />

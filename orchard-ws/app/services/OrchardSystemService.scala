@@ -11,10 +11,10 @@ import javax.inject._
 
 import scala.concurrent.duration._
 
-import akka.actor.ActorSystem
-import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.adapter._
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.scaladsl.adapter._
 import play.api.Configuration
 
 import com.salesforce.mce.orchard.OrchardSettings

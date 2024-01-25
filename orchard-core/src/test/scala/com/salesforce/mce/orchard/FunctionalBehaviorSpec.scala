@@ -9,9 +9,9 @@ package com.salesforce.mce.orchard
 
 import scala.concurrent.duration._
 
-import akka.actor.typed._
-import akka.actor.typed.scaladsl._
-import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import org.apache.pekko.actor.typed._
+import org.apache.pekko.actor.typed.scaladsl._
+import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object SelfMessage {

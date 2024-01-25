@@ -8,7 +8,7 @@ Orchard is an orchestration service that manages data pipelines, compute workflo
 Inspired by AWS' [Data Pipeline](https://aws.amazon.com/datapipeline/) service, Orchard is designed for enterprise use-cases that demand security, extreme concurrency, granular control over the resource lifecycle, and flexible integration with a cloud-based microservice architecture.
 
 ## Design
-Like Apache Spark, Orchard is written in functional Scala. This gives Orchard the power of Scala's well-developed concurrency features, and in particular, the Actor pattern as enabled by Scala's [Akka](https://github.com/akka/akka) library.
+Like Apache Spark, Orchard is written in functional Scala. This gives Orchard the power of Scala's well-developed concurrency features, and in particular, the Actor pattern as enabled by Scala's [Pekko](https://pekko.apache.org/) library.
 
 ## Setup
 Orchard is designed to be deployed into a cloud environment as a service, but can alternatively be set up locally for exploration and development. To do so, follow these steps. 

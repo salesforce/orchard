@@ -9,8 +9,8 @@ package com.salesforce.mce.orchard.system.actor
 
 import scala.concurrent.duration._
 
-import akka.actor.typed._
-import akka.actor.typed.scaladsl._
+import org.apache.pekko.actor.typed._
+import org.apache.pekko.actor.typed.scaladsl._
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
 
 import com.salesforce.mce.orchard.OrchardSettings

@@ -12,8 +12,8 @@ import java.time.{Duration => JDuration, LocalDateTime}
 import scala.concurrent.duration._
 import scala.jdk.DurationConverters._
 
-import akka.actor.typed._
-import akka.actor.typed.scaladsl._
+import org.apache.pekko.actor.typed._
+import org.apache.pekko.actor.typed.scaladsl._
 import play.api.libs.json.JsValue
 
 import com.salesforce.mce.orchard.db.{OrchardDatabase, ResourceInstanceQuery}

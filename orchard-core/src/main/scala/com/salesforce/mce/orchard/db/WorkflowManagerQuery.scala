@@ -9,7 +9,7 @@ package com.salesforce.mce.orchard.db
 
 import java.time.LocalDateTime
 
-import scala.compat.java8.DurationConverters._
+import scala.jdk.DurationConverters._
 import scala.concurrent.duration.FiniteDuration
 
 import slick.jdbc.PostgresProfile.api._
