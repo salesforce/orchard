@@ -9,8 +9,8 @@ package com.salesforce.mce.orchard.system.actor
 
 import scala.util.{Failure, Success}
 
-import akka.actor.typed.scaladsl._
-import akka.actor.typed.{ActorRef, Behavior}
+import org.apache.pekko.actor.typed.scaladsl._
+import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import play.api.libs.json.JsValue
 
 import com.salesforce.mce.orchard.io.ActionIO

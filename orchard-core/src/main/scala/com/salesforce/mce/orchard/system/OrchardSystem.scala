@@ -12,8 +12,8 @@ import java.util.UUID
 
 import scala.concurrent.duration._
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
-import akka.actor.typed.{ActorRef, Behavior}
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
+import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 
 import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{OrchardDatabase, WorkflowManagerQuery, WorkflowQuery}

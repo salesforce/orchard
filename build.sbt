@@ -1,8 +1,8 @@
 val slickVersion = "3.4.1"
 // make sure this is the same as the playWS's dependency
-val akkaVersion = "2.6.21"
-val playJsonVersion = "2.9.4"
-val awsVersion = "2.20.+"
+val pekkoVersion = "1.0.2"
+val playJsonVersion = "3.0.2"
+val awsVersion = "2.23.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -14,13 +14,13 @@ val awsSns            = "software.amazon.awssdk"   % "sns"                      
 val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
 val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
 val postgresql        = "org.postgresql"           % "postgresql"                 % "42.6.0"
-val playJson          = "com.typesafe.play"       %% "play-json"                  % playJsonVersion
-val akkaActor         = "com.typesafe.akka"       %% "akka-actor-typed"           % akkaVersion
-val akkaTestkit       = "com.typesafe.akka"         %% "akka-actor-testkit-typed" % akkaVersion % Test
+val playJson          = "org.playframework"       %% "play-json"                  % playJsonVersion
+val pekkoActor        = "org.apache.pekko"        %% "pekko-actor-typed"          % pekkoVersion
+val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"  % pekkoVersion % Test
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.17" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.8"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.14"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -60,8 +60,8 @@ lazy val orchardCore = (project in file("orchard-core")).
       slickHikaricp,
       postgresql,
       playJson,
-      akkaActor,
-      akkaTestkit,
+      pekkoActor,
+      pekkoTestkit,
       logback % Test,
       stubbornArtifact
     )
@@ -86,8 +86,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       // the transitive jackson dependencies from play framework on has security vulnerabilities
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.2",
       "com.fasterxml.jackson.core" % "jackson-core" % "2.15.2",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2",
-      "com.google.guava" % "guava" % "32.1.1-jre"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2"
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)

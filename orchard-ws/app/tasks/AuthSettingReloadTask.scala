@@ -11,7 +11,7 @@ import javax.inject.Inject
 
 import scala.concurrent.ExecutionContext
 
-import akka.actor.ActorSystem
+import org.apache.pekko.actor.ActorSystem
 import play.api.Logging
 
 import utils.Authorization
