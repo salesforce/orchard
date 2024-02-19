@@ -85,6 +85,7 @@ For example, you can create a file `example/data/sample_workflow_view.json` to d
 ```
 {
   "resources": {
+    "customAmiId": "ami-xxxxxxxx",
     "subnetId": "subnet-xxxxxxxx"
   },
   "s3bucket": "my-bucket-name",
