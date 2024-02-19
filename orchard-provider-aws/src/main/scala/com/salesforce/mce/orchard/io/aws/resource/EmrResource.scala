@@ -61,7 +61,7 @@ case class EmrResource(
               .name(name)
               .releaseLabel(releaseLabel)
               .applications(applications: _*)
-              .customAmiId(spec.amiImageId)
+              .customAmiId(spec.customAmiId)
               .serviceRole(spec.serviceRole)
               .jobFlowRole(spec.resourceRole)
               .bootstrapActions(
@@ -245,7 +245,7 @@ object EmrResource {
 
   case class Spec(
     releaseLabel: String,
-    amiImageId: String,
+    customAmiId: String,
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
