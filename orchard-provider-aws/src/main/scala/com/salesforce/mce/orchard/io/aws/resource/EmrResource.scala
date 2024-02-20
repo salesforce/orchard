@@ -121,6 +121,8 @@ case class EmrResource(
                   .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
                   .foldLeft(builder)(_.additionalSlaveSecurityGroups(_: _*))
+                instancesConfig.serviceAccessSecurityGroup
+                  .foldLeft(builder)(_.serviceAccessSecurityGroup(_))
 
                 builder.build()
               }
@@ -207,7 +209,8 @@ object EmrResource {
     emrManagedMasterSecurityGroup: Option[String],
     emrManagedSlaveSecurityGroup: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
-    additionalSlaveSecurityGroups: Option[Seq[String]]
+    additionalSlaveSecurityGroups: Option[Seq[String]],
+    serviceAccessSecurityGroup: Option[String]
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
