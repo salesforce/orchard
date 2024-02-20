@@ -53,8 +53,8 @@ case class EmrResource(
 
     val response = Client
       .emr()
-      .runJobFlow(
-        loggingUriBase
+      .runJobFlow{
+        val req = loggingUriBase
           .foldLeft(
             RunJobFlowRequest
               .builder()
@@ -113,6 +113,10 @@ case class EmrResource(
 
                 instancesConfig.ec2KeyName
                   .foldLeft(builder)(_.ec2KeyName(_))
+                instancesConfig.emrManagedMasterSecurityGroup
+                  .foldLeft(builder)(_.emrManagedMasterSecurityGroup(_))
+                instancesConfig.emrManagedSlaveSecurityGroup
+                  .foldLeft(builder)(_.emrManagedSlaveSecurityGroup(_))
                 instancesConfig.additionalMasterSecurityGroups
                   .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
@@ -121,9 +125,10 @@ case class EmrResource(
                 builder.build()
               }
           )((r, uri) => r.logUri(uri))
-          .build()
-      )
 
+        spec.customAmiId.foldLeft(req)(_.customAmiId(_))
+        req.build()
+    }
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }
 
@@ -199,6 +204,8 @@ object EmrResource {
     subnetId: String,
     ec2KeyName: Option[String],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
+    emrManagedMasterSecurityGroup: Option[String],
+    emrManagedSlaveSecurityGroup: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
     additionalSlaveSecurityGroups: Option[Seq[String]]
   )
@@ -238,6 +245,7 @@ object EmrResource {
 
   case class Spec(
     releaseLabel: String,
+    customAmiId: Option[String],
     applications: Seq[String],
     serviceRole: String,
     resourceRole: String,
