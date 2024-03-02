@@ -17,7 +17,9 @@ class OrchardSettings private (config: Config) {
 
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
 
-  val checkProgressDelay = config.getDuration("activity.checkProgressDelay").toScala
+  val checkProgressDelayMin = config.getDuration("activity.checkProgressDelayMin").toScala
+
+  val checkProgressDelayMax = config.getDuration("activity.checkProgressDelayMax").toScala
 
   val resourceReattemptDelay = config.getDuration("resource.reAttemptDelay").toScala
 
