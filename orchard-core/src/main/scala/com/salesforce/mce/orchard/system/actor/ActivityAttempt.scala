@@ -8,10 +8,12 @@
 package com.salesforce.mce.orchard.system.actor
 
 import scala.concurrent.ExecutionContext
+
 import org.apache.pekko.actor.typed._
 import org.apache.pekko.actor.typed.scaladsl._
 import play.api.libs.json.JsValue
 import com.salesforce.mce.orchard.db.{ActivityAttemptQuery, OrchardDatabase}
+
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
