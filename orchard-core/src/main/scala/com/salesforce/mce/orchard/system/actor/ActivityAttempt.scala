@@ -189,7 +189,7 @@ object ActivityAttempt {
 
             // Resource not ready yet
             case Left(Status.Pending) =>
-              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitterDelay())
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitteredDelay())
               Behaviors.same
 
             // Resource down for unknown reason, cancel the activity?
@@ -216,7 +216,7 @@ object ActivityAttempt {
     attemptSpec: JsValue,
     checkProgressDelay: ProgressDelay
   ): Behavior[Msg] = {
-    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitterDelay())
+    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitteredDelay())
     Behaviors
       .receiveMessage[Msg] {
         case Cancel =>
@@ -242,7 +242,7 @@ object ActivityAttempt {
               ps.database.sync(ps.query.setTerminated(status, ""))
               terminate(ps, status)
             case Right(status) =>
-              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitterDelay())
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.jitteredDelay())
               Behaviors.same
           }
       }
