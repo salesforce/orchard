@@ -11,7 +11,7 @@ import scala.jdk.DurationConverters._
 
 import com.typesafe.config.{Config, ConfigFactory}
 
-import com.salesforce.mce.orchard.util.{FixedDelay, JitteredDelay, Policy}
+import com.salesforce.mce.orchard.util.{DelayType, FixedDelay, JitteredDelay, Policy}
 
 class OrchardSettings private (config: Config) {
 
@@ -20,8 +20,8 @@ class OrchardSettings private (config: Config) {
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
 
   private def delayPolicy(config: Config, path: String): Policy = {
-    config.getString(s"$path.type") match {
-      case "JitteredDelay" =>
+    DelayType.withName(config.getString(s"$path.type")) match {
+      case DelayType.JitteredDelay =>
         val minDelay = config.getDuration(s"$path.params.minDelay").toScala
         val maxDelay = config.getDuration(s"$path.params.maxDelay").toScala
         JitteredDelay(minDelay, maxDelay)
