@@ -7,10 +7,11 @@
 
 package com.salesforce.mce.orchard
 
-import com.salesforce.mce.orchard.util.{FixedDelay, JitteredDelay, Policy}
-
 import scala.jdk.DurationConverters._
+
 import com.typesafe.config.{Config, ConfigFactory}
+
+import com.salesforce.mce.orchard.util.{FixedDelay, JitteredDelay, Policy}
 
 class OrchardSettings private (config: Config) {
 
