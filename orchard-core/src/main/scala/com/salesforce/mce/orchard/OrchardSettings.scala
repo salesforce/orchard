@@ -7,8 +7,9 @@
 
 package com.salesforce.mce.orchard
 
-import scala.jdk.DurationConverters._
+import com.salesforce.mce.orchard.util.{FixedDelay, JitteredDelay, Policy}
 
+import scala.jdk.DurationConverters._
 import com.typesafe.config.{Config, ConfigFactory}
 
 class OrchardSettings private (config: Config) {
@@ -17,11 +18,21 @@ class OrchardSettings private (config: Config) {
 
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
 
-  val checkProgressDelayMin = config.getDuration("activity.checkProgressDelayMin").toScala
+  private def delayPolicy(config: Config, path: String): Policy = {
+    config.getString(s"$path.type") match {
+      case "JitteredDelay" =>
+        val minDelay = config.getDuration(s"$path.params.minDelay").toScala
+        val maxDelay = config.getDuration(s"$path.params.maxDelay").toScala
+        JitteredDelay(minDelay, maxDelay)
+      case _ =>
+        val fixedDelay = config.getDuration(s"$path.params.fixedDelay").toScala
+        FixedDelay(fixedDelay)
+    }
+  }
 
-  val checkProgressDelayMax = config.getDuration("activity.checkProgressDelayMax").toScala
+  val checkProgressDelayPolicy = delayPolicy(config, "activity.checkProgressDelay")
 
-  val resourceReattemptDelay = config.getDuration("resource.reAttemptDelay").toScala
+  val resourceReattemptDelayPolicy = delayPolicy(config, "resource.reAttemptDelay")
 
 }
 

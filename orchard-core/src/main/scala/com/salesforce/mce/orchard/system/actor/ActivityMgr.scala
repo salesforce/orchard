@@ -10,11 +10,10 @@ package com.salesforce.mce.orchard.system.actor
 import org.apache.pekko.actor.typed.scaladsl._
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import play.api.libs.json.JsValue
-
 import com.salesforce.mce.orchard.OrchardSettings
 import com.salesforce.mce.orchard.db.{ActivityQuery, OrchardDatabase}
 import com.salesforce.mce.orchard.model.Status
-import com.salesforce.mce.orchard.util.ProgressDelay
+import com.salesforce.mce.orchard.util.Policy
 
 object ActivityMgr {
 
@@ -69,13 +68,13 @@ object ActivityMgr {
       .sync(activityQuery.get())
       .map { r =>
         params.ctx.log.info(s"${ctx.self} init with status ${r.status}")
-        init(params, r.status, ProgressDelay(orchardSettings.checkProgressDelayMin, orchardSettings.checkProgressDelayMax))
+        init(params, r.status, orchardSettings.checkProgressDelayPolicy)
       }
       .getOrElse(terminate(params, Status.Failed))
 
   }
 
-  private def init(ps: Params, status: Status.Value, checkProgressDelay: ProgressDelay): Behavior[Msg] = status match {
+  private def init(ps: Params, status: Status.Value, checkProgressDelay: Policy): Behavior[Msg] = status match {
 
     // this is the state if everything follows the happy path
     case Status.Pending =>
@@ -135,7 +134,7 @@ object ActivityMgr {
     Behaviors.stopped
   }
 
-  private def idle(ps: Params, checkProgressDelay: ProgressDelay): Behavior[Msg] = Behaviors
+  private def idle(ps: Params, checkProgressDelay: Policy): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case Start =>
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received Start")
@@ -181,7 +180,7 @@ object ActivityMgr {
     ps: Params,
     attemptId: Int,
     attempt: ActorRef[ActivityAttempt.Msg],
-    checkProgressDelay: ProgressDelay
+    checkProgressDelay: Policy
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case Start =>
