@@ -12,7 +12,7 @@ import scala.concurrent.duration.FiniteDuration
 trait Policy {
 
   /**
-   * @return the number of milliseconds to wait for the next attempt
+   * @return the number of seconds to wait for the next attempt
    */
   def delay(): FiniteDuration
 
