@@ -22,11 +22,11 @@ class OrchardSettings private (config: Config) {
   private def delayPolicy(config: Config, path: String): Policy = {
     DelayType.withName(config.getString(s"$path.type")) match {
       case DelayType.JitteredDelay =>
-        val minDelay = config.getDuration(s"$path.params.minDelay").toScala
-        val maxDelay = config.getDuration(s"$path.params.maxDelay").toScala
+        val minDelay = config.getDuration(s"$path.minDelay").toScala
+        val maxDelay = config.getDuration(s"$path.maxDelay").toScala
         JitteredDelay(minDelay, maxDelay)
       case _ =>
-        val fixedDelay = config.getDuration(s"$path.params.fixedDelay").toScala
+        val fixedDelay = config.getDuration(s"$path.fixedDelay").toScala
         FixedDelay(fixedDelay)
     }
   }
