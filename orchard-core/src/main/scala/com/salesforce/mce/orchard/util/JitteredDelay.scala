@@ -25,9 +25,9 @@ trait JitteredDelay extends Policy {
 
 object JitteredDelay {
 
-  val defaultMinDelay: FiniteDuration = FiniteDuration(90, duration.SECONDS)
+  val defaultMinDelay: FiniteDuration = FiniteDuration(10, duration.SECONDS)
 
-  val defaultMaxDelay: FiniteDuration = FiniteDuration(150, duration.SECONDS)
+  val defaultMaxDelay: FiniteDuration = FiniteDuration(20, duration.SECONDS)
 
   def apply(
     minDelayValue: FiniteDuration = defaultMinDelay,
