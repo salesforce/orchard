@@ -20,14 +20,14 @@ class OrchardSettings private (config: Config) {
   def providerConfig(provider: String): Config = config.getConfig(s"io.$provider")
 
   private def delayPolicy(config: Config, path: String): Policy = {
-    DelayType.withName(config.getString(s"$path.type")) match {
-      case DelayType.JitteredDelay =>
-        val minDelay = config.getDuration(s"$path.minDelay").toScala
-        val maxDelay = config.getDuration(s"$path.maxDelay").toScala
-        JitteredDelay(minDelay, maxDelay)
-      case _ =>
-        val fixedDelay = config.getDuration(s"$path.fixedDelay").toScala
-        FixedDelay(fixedDelay)
+    val delayObj = config.getObject(path)
+    if (delayObj.containsKey(DelayType.JitteredDelay.toString)) {
+      val minDelay = config.getDuration(s"$path.${DelayType.JitteredDelay}.minDelay").toScala
+      val maxDelay = config.getDuration(s"$path.${DelayType.JitteredDelay}.maxDelay").toScala
+      JitteredDelay(minDelay, maxDelay)
+    } else {
+      val fixedDelay = config.getDuration(s"$path.${DelayType.FixedDelay}.fixedDelay").toScala
+      FixedDelay(fixedDelay)
     }
   }
 
