@@ -11,9 +11,11 @@ import scala.jdk.DurationConverters._
 
 import com.typesafe.config.{Config, ConfigFactory}
 
-import com.salesforce.mce.orchard.util.{DelayType, FixedDelay, JitteredDelay, Policy}
+import com.salesforce.mce.orchard.util.{FixedDelay, JitteredDelay, Policy}
 
 class OrchardSettings private (config: Config) {
+
+  val jitteredDelayKey = "jitteredDelay"
 
   def slickDatabaseConf = config.getConfig("jdbc")
 
@@ -21,12 +23,12 @@ class OrchardSettings private (config: Config) {
 
   private def delayPolicy(config: Config, path: String): Policy = {
     val delayObj = config.getObject(path)
-    if (delayObj.containsKey(DelayType.JitteredDelay.toString)) {
-      val minDelay = config.getDuration(s"$path.${DelayType.JitteredDelay}.minDelay").toScala
-      val maxDelay = config.getDuration(s"$path.${DelayType.JitteredDelay}.maxDelay").toScala
+    if (delayObj.containsKey(jitteredDelayKey)) {
+      val minDelay = config.getDuration(s"$path.$jitteredDelayKey.minDelay").toScala
+      val maxDelay = config.getDuration(s"$path.$jitteredDelayKey.maxDelay").toScala
       JitteredDelay(minDelay, maxDelay)
     } else {
-      val fixedDelay = config.getDuration(s"$path.${DelayType.FixedDelay}.fixedDelay").toScala
+      val fixedDelay = config.getDuration(path).toScala
       FixedDelay(fixedDelay)
     }
   }
