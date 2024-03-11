@@ -20,7 +20,7 @@ trait FixedDelay extends Policy {
 
 object FixedDelay {
 
-  val defaultFixedDelay: FiniteDuration = FiniteDuration(3, duration.SECONDS)
+  val defaultFixedDelay: FiniteDuration = FiniteDuration(10, duration.SECONDS)
 
   def apply(fixedDelayValue: FiniteDuration = defaultFixedDelay) = new FixedDelay {
     override def fixedDelay = fixedDelayValue
