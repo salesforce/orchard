@@ -88,7 +88,7 @@ object ResourceMgr {
 
       resourceR.status match {
         case Status.Pending =>
-          idle(ps, orchardSettings.resourceReattemptDelay)
+          idle(ps, orchardSettings.resourceReattemptDelayPolicy.delay())
 
         case Status.Running =>
           val resourceInsts = database.sync(resourceQuery.instances())
@@ -114,7 +114,7 @@ object ResourceMgr {
               ps,
               instId
             )
-          } yield running(ps, orchardSettings.resourceReattemptDelay, rscInst, instId)
+          } yield running(ps, orchardSettings.resourceReattemptDelayPolicy.delay(), rscInst, instId)
 
           result.left.map { sts =>
             database.sync(resourceQuery.setTerminated(sts))

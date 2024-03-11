@@ -7,18 +7,17 @@
 
 package com.salesforce.mce.orchard.system.actor
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
 import org.apache.pekko.actor.typed._
 import org.apache.pekko.actor.typed.scaladsl._
 import play.api.libs.json.JsValue
 
-import com.salesforce.mce.orchard.db.{ActivityAttemptQuery, OrchardDatabase}
+import com.salesforce.mce.orchard.db.{ActivityAttemptQuery, OrchardDatabase, ResourceInstanceQuery}
 import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
-import com.salesforce.mce.orchard.db.ResourceInstanceQuery
+import com.salesforce.mce.orchard.util.Policy
 
 object ActivityAttempt {
 
@@ -52,7 +51,7 @@ object ActivityAttempt {
     activityType: String,
     activitySpec: JsValue,
     resourceId: String,
-    checkProgressDelay: FiniteDuration
+    checkProgressDelay: Policy
   ): Behavior[Msg] = Behaviors.supervise {
     Behaviors.setup { ctx: ActorContext[Msg] =>
       Behaviors.withTimers { timers: TimerScheduler[Msg] =>
@@ -147,7 +146,7 @@ object ActivityAttempt {
     resourceMgr: ActorRef[ResourceMgr.Msg],
     activityType: String,
     activitySpec: JsValue,
-    checkProgressDelay: FiniteDuration
+    checkProgressDelay: Policy
   ): Behavior[Msg] =
     Behaviors
       .receiveMessage[Msg] {
@@ -189,7 +188,7 @@ object ActivityAttempt {
 
             // Resource not ready yet
             case Left(Status.Pending) =>
-              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
               Behaviors.same
 
             // Resource down for unknown reason, cancel the activity?
@@ -214,9 +213,9 @@ object ActivityAttempt {
     resourceInstance: Int,
     activityIO: ActivityIO,
     attemptSpec: JsValue,
-    checkProgressDelay: FiniteDuration
+    checkProgressDelay: Policy
   ): Behavior[Msg] = {
-    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
+    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
     Behaviors
       .receiveMessage[Msg] {
         case Cancel =>
@@ -242,7 +241,7 @@ object ActivityAttempt {
               ps.database.sync(ps.query.setTerminated(status, ""))
               terminate(ps, status)
             case Right(status) =>
-              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay)
+              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
               Behaviors.same
           }
       }
