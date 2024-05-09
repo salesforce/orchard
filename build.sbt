@@ -1,8 +1,8 @@
-val slickVersion = "3.4.1"
+val slickVersion = "3.5.1"
 // make sure this is the same as the playWS's dependency
 val pekkoVersion = "1.0.2"
-val playJsonVersion = "3.0.2"
-val awsVersion = "2.23.+"
+val playJsonVersion = "3.0.3"
+val awsVersion = "2.25.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -13,14 +13,14 @@ val awsSts            = "software.amazon.awssdk"   % "sts"                      
 val awsSns            = "software.amazon.awssdk"   % "sns"                        % awsVersion
 val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
 val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
-val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.2"
+val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.3"
 val playJson          = "org.playframework"       %% "play-json"                  % playJsonVersion
 val pekkoActor        = "org.apache.pekko"        %% "pekko-actor-typed"          % pekkoVersion
 val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"  % pekkoVersion % Test
 
-val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.17" % Test
-val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.1.0" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.4.14"
+val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.18" % Test
+val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "7.0.1" % Test
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.6"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -29,7 +29,7 @@ val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"   
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  scalaVersion := "2.13.12",
+  scalaVersion := "2.13.14",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(
