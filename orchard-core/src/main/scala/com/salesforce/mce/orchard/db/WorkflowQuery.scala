@@ -94,7 +94,7 @@ object WorkflowQuery {
         t: WorkflowTable => t.terminatedAt.asc
     }
 
-    val base = WorkflowTable().filter(r => r.name.like(like) && r.status =!= Status.Deleted)
+    val base = WorkflowTable().filter(r => (r.id.like(like) || r.name.like(like)) && r.status =!= Status.Deleted)
 
     val query = if (statuses.isEmpty) base else base.filter(r => r.status.inSet(statuses))
 
