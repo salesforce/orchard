@@ -87,8 +87,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.3",
       "com.fasterxml.jackson.core" % "jackson-core" % "2.15.3",
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.3",
-      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % "2.17.0",
-      "io.netty" % "netty-handler" % "5.0.0.Alpha1",
+      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % "2.17.0"
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
