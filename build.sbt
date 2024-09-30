@@ -85,8 +85,8 @@ lazy val orchardWS = (project in file("orchard-ws")).
     ),
     dependencyOverrides ++= Seq(
       // the transitive jackson dependencies from play framework on has security vulnerabilities
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
-      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % jacksonVersion,
+      "com.fasterxml.jackson.module" % "jackson-module-scala" % jacksonVersion,
+      "com.fasterxml.jackson.dataformat" % "jackson-dataformat-cbor" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion
     )
