@@ -65,13 +65,6 @@ lazy val orchardCore = (project in file("orchard-core")).
       pekkoTestkit,
       logback % Test,
       stubbornArtifact
-    ),
-    dependencyOverrides ++= Seq(
-      // the transitive jackson dependencies from play framework on has security vulnerabilities
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
-      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion
     )
   )
 
@@ -110,13 +103,6 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
       awsSsm,
       awsSts,
       awsSns
-    ),
-    dependencyOverrides ++= Seq(
-      // the transitive jackson dependencies from play framework on has security vulnerabilities
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
-      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion
     )
   ).
   dependsOn(orchardCore)
