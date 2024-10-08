@@ -25,3 +25,9 @@ classes/
 
 # Examples
 example/data/*.json
+
+# scala metal
+.bloop
+.bsp
+.metals
+metals.sbt
