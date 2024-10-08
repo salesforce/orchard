@@ -1,7 +1,8 @@
 val slickVersion = "3.5.1"
 // make sure this is the same as the playWS's dependency
-val pekkoVersion = "1.0.2"
-val playJsonVersion = "3.0.3"
+val pekkoVersion = "1.0.3"
+val playJsonVersion = "3.0.4"
+val jacksonVersion = "2.18.0"
 val awsVersion = "2.25.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
@@ -84,10 +85,13 @@ lazy val orchardWS = (project in file("orchard-ws")).
     ),
     dependencyOverrides ++= Seq(
       // the transitive jackson dependencies from play framework on has security vulnerabilities
-      "com.fasterxml.jackson.core" % "jackson-databind" % "2.17.2",
-      "com.fasterxml.jackson.core" % "jackson-core" % "2.17.2",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.17.2",
-      "com.fasterxml.jackson.dataformat" %% "jackson-dataformat-cbor" % "2.17.2"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
+      "com.fasterxml.jackson.dataformat" % "jackson-dataformat-cbor" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
+      "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
