@@ -112,8 +112,8 @@ object ShellScriptActivity {
     outputUri: Option[String],
     executionTimeout: Option[Int],
     deliveryTimeout: Option[Int],
-    region: Option[String] = None,
-    endPoint: Option[String] = None
+    region: Option[String],
+    endPoint: Option[String]
   )
 
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
