@@ -29,8 +29,8 @@ case class ShellScriptActivity(
   outputUri: Option[String],
   executionTimeout: Option[Int],
   deliveryTimeout: Option[Int],
-  region: Option[String] = None,
-  endPoint: Option[String] = None
+  region: Option[String],
+  endPoint: Option[String]
 ) extends Ec2Activity(name, ec2InstanceId) {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -111,7 +111,9 @@ object ShellScriptActivity {
     args: Seq[String],
     outputUri: Option[String],
     executionTimeout: Option[Int],
-    deliveryTimeout: Option[Int]
+    deliveryTimeout: Option[Int],
+    region: Option[String],
+    endPoint: Option[String]
   )
 
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -128,7 +130,9 @@ object ShellScriptActivity {
         ec2InstanceId,
         spec.outputUri,
         spec.executionTimeout,
-        spec.deliveryTimeout
+        spec.deliveryTimeout,
+        spec.region,
+        spec.endPoint
       )
   }
 
