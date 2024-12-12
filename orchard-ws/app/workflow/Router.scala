@@ -28,8 +28,7 @@ class Router @Inject() (ctrl: Controller) extends SimpleRouter {
         ) =>
       ctrl.filter(like, statuses, orderBy, order, page, perPage)
 
-    case GET(p"/$id/details") => ctrl.workflowDetails(id)
-
+    case GET(p"/$id/details") => ctrl.details(id)
     case GET(p"/$id/activities") => ctrl.activities(id)
     case GET(p"/$id/activity/$actId") => ctrl.activityAttempts(id, actId)
 

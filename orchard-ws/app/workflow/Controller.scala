@@ -309,7 +309,7 @@ class Controller @Inject() (
       }
   }
 
-  def workflowDetails(id: String) = userAction.async {
+  def details(id: String) = userAction.async {
     db.orchardDB
       .async(new WorkflowQuery(id).get())
       .flatMap {
