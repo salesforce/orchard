@@ -313,7 +313,7 @@ class Controller @Inject() (
     db.orchardDB
       .async(new WorkflowQuery(id).get())
       .flatMap {
-        case Some(wf) =>  Future.successful(Ok(toResponse(wf)))
+        case Some(wf) => Future.successful(Ok(toResponse(wf)))
         case _ => Future.successful(NotFound(Json.toJson(s"Workflow $id does not exist")))
       }
   }
