@@ -31,8 +31,8 @@ sdk env install
 sdk env
 
 # use brew to install postman (for API calls) and docker (if needed)
-brew install -cask postman
-brew install -cask docker
+brew install --cask postman
+brew install --cask docker
 ```
 
 **Configure Postgres Database**
@@ -103,12 +103,25 @@ Once generated, your `sample_workflow.json` can be used to create a workflow:
 ```html
 POST http://localhost:9001/v1/workflow
 ```
+OR
+```sh
+curl -X POST \
+-H "Content-type: application/json" \
+-d "$(jq -c . < path/to/sample_workflow.json)" \
+"http://localhost:9001/v1/workflow"
+```
 
 Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
 
 Once defined, activate a workflow using the workflow id like so:
 ```html
 PUT http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77
+```
+OR
+```sh
+curl -X PUT \
+-H "Content-type: application/json" \
+"http://localhost:9001/v1/workflow/wf-f231a08f-60e4-480a-b845-e53e06918f77/activate"
 ```
 
 **Resource and Activity Types**
