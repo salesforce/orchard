@@ -105,10 +105,10 @@ POST http://localhost:9001/v1/workflow
 ```
 OR
 ```sh
-ORCHARD_WORKFLOW_PAYLOAD=$(jq -c . < path/to/sample_workflow.json)
 curl -X POST \
 -H "Content-type: application/json" \
--d "${ORCHARD_WORKFLOW_PAYLOAD}" "http://localhost:9001/v1/workflow"
+-d "$(jq -c . < path/to/sample_workflow.json)" \
+"http://localhost:9001/v1/workflow"
 ```
 
 Which returns a workflow_id. For example: `wf-f231a08f-60e4-480a-b845-e53e06918f77`
