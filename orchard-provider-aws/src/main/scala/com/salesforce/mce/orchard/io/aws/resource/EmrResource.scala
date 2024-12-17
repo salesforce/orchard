@@ -104,10 +104,6 @@ case class EmrResource(
                               case MarketTypeStrategy.UseOnDemandOnLastAttempt =>
                                 if (lastAttempt) builder.market(MarketType.ON_DEMAND)
                                 else builder.bidPrice(p).market(MarketType.SPOT)
-                              case MarketTypeStrategy.UseOnDemandOnMasterNode =>
-                                if (c.instanceRoleType == "MASTER")
-                                  builder.market(MarketType.ON_DEMAND)
-                                else builder.bidPrice(p).market(MarketType.SPOT)
                               case MarketTypeStrategy.AlwaysUseOnDemand =>
                                 builder.market(MarketType.ON_DEMAND)
                               case _ => builder.bidPrice(p).market(MarketType.SPOT)
