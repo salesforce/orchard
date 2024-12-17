@@ -16,6 +16,7 @@ import play.api.libs.json._
 import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.ResourceIO
+import com.salesforce.mce.orchard.io.aws.util.MarketTypeStrategy
 import com.salesforce.mce.orchard.io.aws.{Client, ProviderSettings}
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
@@ -26,7 +27,7 @@ case class EmrResource(
   loggingPath: String,
   spec: EmrResource.Spec,
   lastAttempt: Boolean,
-  useOnDemandOnLastAttempt: Boolean
+  onDemandMode: MarketTypeStrategy.Value
 ) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -53,7 +54,7 @@ case class EmrResource(
 
     val response = Client
       .emr()
-      .runJobFlow{
+      .runJobFlow {
         val req = loggingUriBase
           .foldLeft(
             RunJobFlowRequest
@@ -99,10 +100,17 @@ case class EmrResource(
 
                         c.instanceBidPrice
                           .fold(builder.market(MarketType.ON_DEMAND))(p =>
-                            if (lastAttempt && useOnDemandOnLastAttempt) {
-                              builder.market(MarketType.ON_DEMAND)
-                            } else {
-                              builder.bidPrice(p).market(MarketType.SPOT)
+                            onDemandMode match {
+                              case MarketTypeStrategy.UseOnDemandOnLastAttempt =>
+                                if (lastAttempt) builder.market(MarketType.ON_DEMAND)
+                                else builder.bidPrice(p).market(MarketType.SPOT)
+                              case MarketTypeStrategy.UseOnDemandOnMasterNode =>
+                                if (c.instanceRoleType == "MASTER")
+                                  builder.market(MarketType.ON_DEMAND)
+                                else builder.bidPrice(p).market(MarketType.SPOT)
+                              case MarketTypeStrategy.AlwaysUseOnDemand =>
+                                builder.market(MarketType.ON_DEMAND)
+                              case _ => builder.bidPrice(p).market(MarketType.SPOT)
                             }
                           )
 
@@ -130,7 +138,7 @@ case class EmrResource(
 
         spec.customAmiId.foldLeft(req)(_.customAmiId(_))
         req.build()
-    }
+      }
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }
 
@@ -256,7 +264,8 @@ object EmrResource {
     bootstrapActions: Option[Seq[BootstrapAction]],
     configurations: Option[Seq[ConfigurationSpec]],
     instancesConfig: InstancesConfig,
-    useOnDemandOnLastAttempt: Option[Boolean]
+    useOnDemandOnLastAttempt: Option[Boolean],
+    onDemandMode: Option[MarketTypeStrategy.Value]
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
 
@@ -269,7 +278,10 @@ object EmrResource {
         loggingPath,
         spec,
         conf.instanceId >= conf.maxAttempt,
-        spec.useOnDemandOnLastAttempt.getOrElse(false)
+        spec.onDemandMode.getOrElse(
+          if (spec.useOnDemandOnLastAttempt.exists(identity)) MarketTypeStrategy.UseOnDemandOnLastAttempt
+          else MarketTypeStrategy.AlwaysUseSpot
+        )
       )
     }
 

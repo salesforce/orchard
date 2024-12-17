@@ -19,10 +19,16 @@ import software.amazon.awssdk.services.ssm.model.{
 
 import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.io.ResourceIO
+import com.salesforce.mce.orchard.io.aws.util.MarketTypeStrategy
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class Ec2Resource(name: String, spec: Ec2Resource.Spec, lastAttempt: Boolean) extends ResourceIO {
+case class Ec2Resource(
+  name: String,
+  spec: Ec2Resource.Spec,
+  lastAttempt: Boolean,
+  onDemandMode: MarketTypeStrategy.Value
+) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
@@ -44,12 +50,16 @@ case class Ec2Resource(name: String, spec: Ec2Resource.Spec, lastAttempt: Boolea
     spec.securityGroups
       .foldLeft(builder)(_.securityGroupIds(_: _*))
 
-    if (spec.spotInstance && !(lastAttempt && spec.useOnDemandOnLastAttempt.getOrElse(false))) {
+    if (
+      onDemandMode == MarketTypeStrategy.AlwaysUseSpot ||
+      onDemandMode == MarketTypeStrategy.UseOnDemandOnLastAttempt && !lastAttempt
+    ) {
       logger.debug(s"create: spotInstance=true")
       builder.instanceMarketOptions(
         InstanceMarketOptionsRequest.builder().marketType(MarketType.SPOT).build()
       )
     }
+
     spec.tags match {
       case None =>
         logger.debug(s"no tags given")
@@ -235,7 +245,7 @@ object Ec2Resource {
     securityGroups: Option[Seq[String]],
     tags: Option[Seq[AwsTag]],
     spotInstance: Boolean,
-    useOnDemandOnLastAttempt: Option[Boolean]
+    onDemandMode: Option[MarketTypeStrategy.Value]
   )
 
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -243,7 +253,14 @@ object Ec2Resource {
   def decode(conf: ResourceIO.Conf): JsResult[Ec2Resource] = conf.resourceSpec
     .validate[Spec]
     .map { spec =>
-      Ec2Resource.apply(conf.resourceName, spec, conf.instanceId >= conf.maxAttempt)
+      Ec2Resource.apply(
+        conf.resourceName,
+        spec,
+        conf.instanceId >= conf.maxAttempt,
+        spec.onDemandMode.getOrElse(
+          if (spec.spotInstance) MarketTypeStrategy.UseOnDemandOnLastAttempt
+          else MarketTypeStrategy.AlwaysUseOnDemand
+        )
+      )
     }
-
 }
