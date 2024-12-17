@@ -26,6 +26,7 @@ case class EmrResource(
   loggingPath: String,
   spec: EmrResource.Spec,
   lastAttempt: Boolean,
+  spotInstance: Boolean,
   useOnDemandOnLastAttempt: Boolean
 ) extends ResourceIO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -99,7 +100,7 @@ case class EmrResource(
 
                         c.instanceBidPrice
                           .fold(builder.market(MarketType.ON_DEMAND))(p =>
-                            if (lastAttempt && useOnDemandOnLastAttempt) {
+                            if (!spotInstance || lastAttempt && useOnDemandOnLastAttempt) {
                               builder.market(MarketType.ON_DEMAND)
                             } else {
                               builder.bidPrice(p).market(MarketType.SPOT)
@@ -256,6 +257,7 @@ object EmrResource {
     bootstrapActions: Option[Seq[BootstrapAction]],
     configurations: Option[Seq[ConfigurationSpec]],
     instancesConfig: InstancesConfig,
+    spotInstance: Option[Boolean],
     useOnDemandOnLastAttempt: Option[Boolean]
   )
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -269,6 +271,7 @@ object EmrResource {
         loggingPath,
         spec,
         conf.instanceId >= conf.maxAttempt,
+        spec.spotInstance.getOrElse(true),
         spec.useOnDemandOnLastAttempt.getOrElse(false)
       )
     }
