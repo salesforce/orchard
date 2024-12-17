@@ -17,8 +17,8 @@ import software.amazon.awssdk.services.ssm.model.{
   InstanceInformationStringFilter
 }
 
-import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.io.ResourceIO
+import com.salesforce.mce.orchard.io.aws.Client
 import com.salesforce.mce.orchard.io.aws.util.MarketTypeStrategy
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.RetryHelper._
