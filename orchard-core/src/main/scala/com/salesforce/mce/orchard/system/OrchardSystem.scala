@@ -25,6 +25,7 @@ object OrchardSystem {
   val CancelingScanDelay = 10.seconds
   val HeartBeatDelay = 10.seconds
   val CheckAdoptionDelay = 1.minute
+  val PruneDelay = 1.day
 
   sealed trait Msg
   case class ActivateMsg(workflowId: String) extends Msg
@@ -32,12 +33,14 @@ object OrchardSystem {
   private case class WorkflowTerminated(workflowId: String) extends Msg
   private case object HeartBeat extends Msg
   private case object AdoptOrphanWorkflows extends Msg
+  private case object PruneWorkflows extends Msg
 
   def apply(database: OrchardDatabase, orchardSettings: OrchardSettings): Behavior[Msg] = Behaviors.setup { ctx =>
     Behaviors.withTimers { timers =>
       timers.startSingleTimer(ScanCanceling, CancelingScanDelay)
       timers.startSingleTimer(HeartBeat, HeartBeatDelay)
       timers.startSingleTimer(AdoptOrphanWorkflows, CheckAdoptionDelay)
+      timers.startSingleTimer(PruneWorkflows, PruneDelay)
       val managerId =
         s"os-${InetAddress.getLocalHost().getHostName()}-${UUID.randomUUID()}".take(64)
       apply(
@@ -126,6 +129,11 @@ object OrchardSystem {
         timers.startSingleTimer(AdoptOrphanWorkflows, CheckAdoptionDelay)
         Behaviors.same
 
+      case PruneWorkflows =>
+        ctx.log.info(s"${ctx.self} Received PrueWorkflows")
+        database.sync(WorkflowQuery.pruneOldData(orchardSettings.workflowTtl))
+        timers.startSingleTimer(PruneWorkflows, PruneDelay)
+        Behaviors.same
     }
     .receiveSignal { case (_, signal) => // log PreRestart
       ctx.log.info(s"${ctx.self} receiveSignal ${signal.toString}")
