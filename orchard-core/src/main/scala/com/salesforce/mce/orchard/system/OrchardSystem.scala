@@ -25,7 +25,7 @@ object OrchardSystem {
   val CancelingScanDelay = 10.seconds
   val HeartBeatDelay = 10.seconds
   val CheckAdoptionDelay = 1.minute
-  val PruneDelay = 1.day
+  val PruneDelay = 1.hour
 
   sealed trait Msg
   case class ActivateMsg(workflowId: String) extends Msg
