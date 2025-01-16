@@ -7,10 +7,7 @@
 
 package com.salesforce.mce.orchard
 
-import java.time.Duration
-
 import scala.jdk.DurationConverters._
-import scala.util.Try
 
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -39,7 +36,7 @@ class OrchardSettings private (config: Config) {
 
   val resourceReattemptDelayPolicy = delayPolicy(config, "resource.reAttemptDelay")
 
-  val workflowTtl = Try(config.getDuration("workflow.ttl")).getOrElse(Duration.ofDays(-1))
+  val workflowTtl = config.getDuration("workflow.ttl")
 
 }
 
