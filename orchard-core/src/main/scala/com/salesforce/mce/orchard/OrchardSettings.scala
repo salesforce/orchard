@@ -36,6 +36,8 @@ class OrchardSettings private (config: Config) {
 
   val resourceReattemptDelayPolicy = delayPolicy(config, "resource.reAttemptDelay")
 
+  val workflowTtl = config.getDuration("workflow.ttl")
+
 }
 
 object OrchardSettings {

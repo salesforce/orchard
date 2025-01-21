@@ -7,7 +7,7 @@
 
 package com.salesforce.mce.orchard.db
 
-import java.time.{LocalDate, LocalDateTime}
+import java.time.{Duration, LocalDate, LocalDateTime}
 
 import slick.jdbc.GetResult
 import slick.jdbc.PostgresProfile.api._
@@ -103,6 +103,11 @@ object WorkflowQuery {
       .drop(offset)
       .take(limit)
       .result
+  }
+
+  def pruneOldData(ttl: Duration): DBIO[Int] = {
+      val cutoffTime = LocalDateTime.now().minus(ttl)
+      WorkflowTable().filter(r => r.createdAt < cutoffTime).delete
   }
 
   def filterByStatus(status: Status.Value): DBIO[Seq[WorkflowTable.R]] =
