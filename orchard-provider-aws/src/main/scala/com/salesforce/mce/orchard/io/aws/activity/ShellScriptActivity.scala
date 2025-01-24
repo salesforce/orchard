@@ -28,7 +28,9 @@ case class ShellScriptActivity(
   ec2InstanceId: String,
   outputUri: Option[String],
   executionTimeout: Option[Int],
-  deliveryTimeout: Option[Int]
+  deliveryTimeout: Option[Int],
+  region: Option[String],
+  endPoint: Option[String]
 ) extends Ec2Activity(name, ec2InstanceId) {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -44,7 +46,10 @@ case class ShellScriptActivity(
 
     lazy val ts = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MINUTES)
     val preRunInfo = s"cd ~ "
-    val pullScript = s"aws s3 cp $scriptLocation . "
+    val scriptPrefix = "aws s3 cp"
+    val scriptWithRegion = region.fold(scriptPrefix)(r => s"$scriptPrefix --region=$r")
+    val scriptWithEndpoint = endPoint.fold(scriptWithRegion)(r => s"$scriptWithRegion --endpoint-url=$r")
+    val pullScript = s"$scriptWithEndpoint $scriptLocation . "
     val scriptFile = scriptLocation.split("/").last
     val chmodScript = s"chmod +x ./$scriptFile"
     val runScript = s" ./$scriptFile ${args.mkString(" ")}"
@@ -106,7 +111,9 @@ object ShellScriptActivity {
     args: Seq[String],
     outputUri: Option[String],
     executionTimeout: Option[Int],
-    deliveryTimeout: Option[Int]
+    deliveryTimeout: Option[Int],
+    region: Option[String],
+    endPoint: Option[String]
   )
 
   implicit val specReads: Reads[Spec] = Json.reads[Spec]
@@ -123,7 +130,9 @@ object ShellScriptActivity {
         ec2InstanceId,
         spec.outputUri,
         spec.executionTimeout,
-        spec.deliveryTimeout
+        spec.deliveryTimeout,
+        spec.region,
+        spec.endPoint
       )
   }
 
