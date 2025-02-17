@@ -309,6 +309,15 @@ class Controller @Inject() (
       }
   }
 
+  def details(id: String) = userAction.async {
+    db.orchardDB
+      .async(new WorkflowQuery(id).get())
+      .flatMap {
+        case Some(wf) => Future.successful(Ok(toResponse(wf)))
+        case _ => Future.successful(NotFound(Json.toJson(s"Workflow $id does not exist")))
+      }
+  }
+
   private def toResponse(r: WorkflowTable.R): JsValue = Json.toJson(
     WorkflowResponse(
       r.id,
