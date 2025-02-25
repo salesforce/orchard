@@ -17,19 +17,22 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigList}
 
 class AuthorizationSettings private (config: Config) {
 
-  def authHeader: String = config.getString(s"header-name")
+  def authHeaderApiKey: String = config.getString(s"api-key.header-name")
+  def authHeaderXfcc: String = config.getString(s"xfcc.header-name")
 
-  def authEnabled: Boolean = config.getBoolean(s"enabled")
+  def authEnabledApiKey: Boolean = config.getBoolean(s"api-key.enabled")
+  def authEnabledXfcc: Boolean = config.getBoolean(s"xfcc.enabled")
 
   def keyRoles: Map[String, List[String]] = {
     val userRoles = for {
-      (r, us) <- config.getConfig("hashed-keys").root().asScala.toList
+      (r, us) <- config.getConfig("api-key.hashed-keys").root().asScala.toList
       u <- us.asInstanceOf[ConfigList].unwrapped().asScala
     } yield u.toString() -> r
 
     userRoles.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
   }
 
+  def xfccMustContain: String = config.getString("xfcc.must-contain")
 
   def ttl: Option[Long] = Try(config.getInt(s"ttl")) match {
     case Success(d) => Some(d)

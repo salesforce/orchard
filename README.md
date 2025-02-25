@@ -53,14 +53,25 @@ This will start the database container, provision the required tables, and start
 
 **Authentication**
 
-Orchard is by default running a development configuration where authentication is disabled. To enable API authentication, set `orchard.auth.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). Orchard will then pull the keys specified in 
+Orchard is by default running a development configuration where authentication is disabled. 
+
+To enable API authentication, set `orchard.auth.api-key.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). 
+Orchard will then pull the keys specified in 
 ```
 hashed-keys = {
   user = [ ${?MCE_ENV_X_API_USER1} , ${?MCE_ENV_X_API_USER2} ]
   admin = [ ${?MCE_ENV_X_API_ADMIN1} , ${?MCE_ENV_X_API_ADMIN2} ]
 }
 ```
-which must match the key provided in the header of any inbound API requests. 
+which must match the not hashed key provided in the header of any inbound API requests. 
+
+To enable x-forwarded-client-cert authentication, set `orchard.auth.xfcc.enabled = true` in [application.conf](https://github.com/salesforce/orchard/blob/master/orchard-ws/conf/application.conf). 
+Orchard will then check in the header field value specified in `orchard.auth.xfcc.header-name` to have the sub-string to be present.
+```
+must-contain = ${?XFCC_MUST_CONTAIN}
+```
+
+The api-key and xfcc checks can be optional, enabled independently or in combination.  
 
 ## Using Orchard
 Once the setup is complete, Orchard is ready to receive a number of different instructions via API request.

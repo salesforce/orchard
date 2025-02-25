@@ -21,9 +21,14 @@ class Authorization(private var authorizationSettings: AuthorizationSettings) {
   import Authorization._
 
   def getRoles(request: Request[_]): List[String] = {
-    authorizationSettings.authEnabled match {
-      case true => getKeyRoles(request.headers.get(authorizationSettings.authHeader))
-      case false => List(Admin)
+    (authorizationSettings.authEnabledApiKey, authorizationSettings.authEnabledXfcc) match {
+      case (true, true) =>
+        val yesApiKey = getKeyRoles(request.headers.get(authorizationSettings.authHeaderApiKey)).nonEmpty
+        val yesXfcc = getXfcc(request.headers.get(authorizationSettings.authHeaderXfcc)).nonEmpty
+        if (yesApiKey && yesXfcc) List(Admin) else List.empty
+      case (true, false) => getKeyRoles(request.headers.get(authorizationSettings.authHeaderApiKey))
+      case (false, true) => getXfcc(request.headers.get(authorizationSettings.authHeaderXfcc))
+      case (false, false) => List(Admin)
     }
   }
 
@@ -34,11 +39,20 @@ class Authorization(private var authorizationSettings: AuthorizationSettings) {
     }
   }
 
+  private def getXfcc(key: Option[String]) = {
+    key match {
+      case Some(xfcc) =>
+        if (xfcc.contains(authorizationSettings.xfccMustContain)) { List(Admin) }
+        else { List.empty }
+      case None => List.empty
+    }
+  }
+
   def checkAuthorization(request: Request[_]): Boolean =
     request.headers
-      .get(authorizationSettings.authHeader)
+      .get(authorizationSettings.authHeaderApiKey)
       .map(validateKey)
-      .getOrElse(!authorizationSettings.authEnabled)
+      .getOrElse(!authorizationSettings.authEnabledApiKey)
 
   def refreshDelay: Option[FiniteDuration] = authorizationSettings.ttl.map(_.second)
 
