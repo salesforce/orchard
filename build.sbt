@@ -21,7 +21,7 @@ val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.19" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "7.0.1" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.9"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.17"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
