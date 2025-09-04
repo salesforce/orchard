@@ -47,7 +47,8 @@ object ResourceMgr {
     rscType: String,
     rscSpec: JsValue,
     terminateAfter: FiniteDuration,
-    timers: TimerScheduler[ResourceMgr.Msg]
+    timers: TimerScheduler[ResourceMgr.Msg],
+    pendingReplies: Set[ActorRef[ResourceInstSpecRsp]] = Set.empty
   )
 
   def apply(
@@ -66,11 +67,11 @@ object ResourceMgr {
       // here we make all invalid input to default 8 hours, the input should do validation before
       // saving them to DB
       val terminateAfterDuration: FiniteDuration =
-      try {
-        (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
-      } catch {
-        case e: Exception => 8.hour
-      }
+        try {
+          (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
+        } catch {
+          case e: Exception => 8.hour
+        }
       val ps = Params(
         ctx,
         database,
@@ -92,12 +93,17 @@ object ResourceMgr {
 
         case Status.Running =>
           val resourceInsts = database.sync(resourceQuery.instances())
-          val lastInstOpt = resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
+          val lastInstOpt =
+            resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
           val instIdEith = lastInstOpt match {
             case Some(lastInst) =>
-              if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
+              if (
+                !Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt
+              ) {
                 Right(lastInst.instanceAttempt + 1)
-              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending) {
+              } else if (
+                lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending
+              ) {
                 Right(lastInst.instanceAttempt)
               } else {
                 Left(lastInst.status)
@@ -147,7 +153,9 @@ object ResourceMgr {
         }
 
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.error(
+          s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
+        )
         Behaviors.unhandled
 
       // no resource instance should exist yet, this is unexpected
@@ -181,14 +189,23 @@ object ResourceMgr {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-        Behaviors.same
+        running(
+          ps.copy(pendingReplies = ps.pendingReplies + replyTo),
+          resourceAttemptDelay,
+          resourceInst,
+          currentInstId
+        )
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.error(s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.error(
+          s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
+        )
         Behaviors.unhandled
       case ResourceInstanceFinished(Status.Timeout) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
         ps.database.sync(ps.resourceQuery.setTerminated(Status.Timeout))
-        finished(ps, Status.Timeout)
+        // Reply to all pending requests with timeout status before transitioning to finished
+        ps.pendingReplies.foreach(_ ! ResourceInstSpecRsp(Left(Status.Timeout)))
+        finished(ps.copy(pendingReplies = Set.empty), Status.Timeout)
       // resource should not receive finished status during "running" state other than Timeout
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
@@ -201,22 +218,32 @@ object ResourceMgr {
         )
         // maybe the current instance is already a new one
         if (instId < currentInstId) {
-          ps.ctx.self ! GetResourceInstSpec(replyTo)
-          Behaviors.same
+          // Re-send GetResourceInstSpec for all pending replies to current instance
+          ps.pendingReplies.foreach(r => ps.ctx.self ! GetResourceInstSpec(r))
+          running(
+            ps.copy(pendingReplies = Set.empty),
+            resourceAttemptDelay,
+            resourceInst,
+            currentInstId
+          )
         } else if (currentInstId >= ps.maxAttempt) {
           ps.database.sync(ps.resourceQuery.setTerminated(status))
-          replyTo ! ResourceInstSpecRsp(Left(status))
-          finished(ps, status)
+          // Reply to all pending requests with the failure status
+          ps.pendingReplies.foreach(_ ! ResourceInstSpecRsp(Left(status)))
+          finished(ps.copy(pendingReplies = Set.empty), status)
         } else {
           val newInstId = currentInstId + 1
-          // create a new instance upon failure and deligate the response to the new instance
+          // create a new instance upon failure and delegate responses to the new instance
+          // The pending replies will be handled when the new instance is created
           ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), resourceAttemptDelay)
           waiting(ps, resourceAttemptDelay)
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
         resourceInst ! ResourceInstance.Shutdown(status)
-        terminating(ps.ctx, ps, status)
+        // Reply to all pending requests immediately since we're shutting down
+        ps.pendingReplies.foreach(_ ! ResourceInstSpecRsp(Left(status)))
+        terminating(ps.ctx, ps.copy(pendingReplies = Set.empty), status)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
@@ -230,18 +257,22 @@ object ResourceMgr {
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received GetResourceInstSpec($replyTo)")
-        ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
-        Behaviors.same
+        // Add this replyTo for when resource becomes available
+        waiting(ps.copy(pendingReplies = ps.pendingReplies + replyTo), resourceAttemptDelay)
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CreateResourceInst($replyTo, $instId)")
         spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
-            replyTo ! ResourceInstSpecRsp(Left(sts))
-            finished(ps, sts)
+            // Reply to the original replyTo and all pending replies with the failure status
+            (ps.pendingReplies + replyTo).foreach(_ ! ResourceInstSpecRsp(Left(sts)))
+            finished(ps.copy(pendingReplies = Set.empty), sts)
           case Right(rscInst) =>
-            ps.ctx.self ! GetResourceInstSpec(replyTo)
-            running(ps, resourceAttemptDelay, rscInst, instId)
+            // Send GetResourceInstSpec to the new instance for all replies (pending + current)
+            (ps.pendingReplies + replyTo).foreach(r =>
+              rscInst ! ResourceInstance.GetResourceInstSpec(r)
+            )
+            running(ps.copy(pendingReplies = Set.empty), resourceAttemptDelay, rscInst, instId)
         }
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
@@ -249,13 +280,16 @@ object ResourceMgr {
         )
         Behaviors.unhandled
       case InactiveResourceInstance(instId, status, replyTo) =>
-        ps.ctx.log.error(
-          s"${ps.ctx.self} (waiting) received UNEXPECTED InactiveResourceInstance($instId, $status, $replyTo)"
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (waiting) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
-        Behaviors.unhandled
+        // Add this replyTo to the pending set - it will be handled when new instance is created
+        waiting(ps.copy(pendingReplies = ps.pendingReplies + replyTo), resourceAttemptDelay)
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Shutdown($status)")
-        terminating(ps.ctx, ps, status)
+        // Reply to all pending requests with the shutdown status
+        ps.pendingReplies.foreach(_ ! ResourceInstSpecRsp(Left(status)))
+        terminating(ps.ctx, ps.copy(pendingReplies = Set.empty), status)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (waiting) received signal $signal")
@@ -288,7 +322,8 @@ object ResourceMgr {
         ps.ctx.log.info(
           s"${ps.ctx.self} (finished) received InactiveResourceInstance($instanceId, $sts, $replyTo)"
         )
-        ps.ctx.self ! GetResourceInstSpec(replyTo)
+        // Reply immediately with the failed status since we're in finished state
+        replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case Shutdown(_) =>
         ps.ctx.log.info(s"${ps.ctx.self} (finished) received Shutdown(_)")
@@ -310,7 +345,10 @@ object ResourceMgr {
         replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (terminating) received CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (terminating) received CreateResourceInst($replyTo, $instId)"
+        )
+        replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case ResourceInstanceFinished(sts) =>
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
@@ -320,7 +358,8 @@ object ResourceMgr {
         ps.ctx.log.info(
           s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
         )
-        ctx.self ! GetResourceInstSpec(replyTo)
+        // Reply immediately with terminating status
+        replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case Shutdown(_) =>
         Behaviors.same
@@ -346,7 +385,15 @@ object ResourceMgr {
     instId: Int
   ): Either[Status.Value, ActorRef[ResourceInstance.Msg]] = {
     val rscIOResult = ResourceIO(
-      ResourceIO.Conf(ps.workflowId, ps.resourceId, ps.resourceName, instId, ps.maxAttempt, ps.rscType, ps.rscSpec)
+      ResourceIO.Conf(
+        ps.workflowId,
+        ps.resourceId,
+        ps.resourceName,
+        instId,
+        ps.maxAttempt,
+        ps.rscType,
+        ps.rscSpec
+      )
     )
 
     rscIOResult match {
