@@ -219,7 +219,7 @@ object ResourceMgr {
         // maybe the current instance is already a new one
         if (instId < currentInstId) {
           // Re-send GetResourceInstSpec for all pending replies to current instance
-          ps.pendingReplies.foreach(r => ps.ctx.self ! GetResourceInstSpec(r))
+          (ps.pendingReplies + replyTo).foreach(r => ps.ctx.self ! GetResourceInstSpec(r))
           running(
             ps.copy(pendingReplies = Set.empty),
             resourceAttemptDelay,
@@ -229,7 +229,7 @@ object ResourceMgr {
         } else if (currentInstId >= ps.maxAttempt) {
           ps.database.sync(ps.resourceQuery.setTerminated(status))
           // Reply to all pending requests with the failure status
-          ps.pendingReplies.foreach(_ ! ResourceInstSpecRsp(Left(status)))
+          (ps.pendingReplies + replyTo).foreach(_ ! ResourceInstSpecRsp(Left(status)))
           finished(ps.copy(pendingReplies = Set.empty), status)
         } else {
           val newInstId = currentInstId + 1
