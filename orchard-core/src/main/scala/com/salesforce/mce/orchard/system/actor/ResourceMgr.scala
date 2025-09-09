@@ -66,11 +66,11 @@ object ResourceMgr {
       // here we make all invalid input to default 8 hours, the input should do validation before
       // saving them to DB
       val terminateAfterDuration: FiniteDuration =
-      try {
-        (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
-      } catch {
-        case e: Exception => 8.hour
-      }
+        try {
+          (resourceR.terminateAfter * 1.hour).asInstanceOf[FiniteDuration]
+        } catch {
+          case e: Exception => 8.hour
+        }
       val ps = Params(
         ctx,
         database,
@@ -92,12 +92,17 @@ object ResourceMgr {
 
         case Status.Running =>
           val resourceInsts = database.sync(resourceQuery.instances())
-          val lastInstOpt = resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
+          val lastInstOpt =
+            resourceInsts.sortBy(_.instanceAttempt)(Ordering[Int].reverse).headOption
           val instIdEith = lastInstOpt match {
             case Some(lastInst) =>
-              if (!Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt) {
+              if (
+                !Status.isAlive(lastInst.status) && lastInst.instanceAttempt < resourceR.maxAttempt
+              ) {
                 Right(lastInst.instanceAttempt + 1)
-              } else if (lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending) {
+              } else if (
+                lastInst.status == Status.Activating || lastInst.status == Status.Running || lastInst.status == Status.Pending
+              ) {
                 Right(lastInst.instanceAttempt)
               } else {
                 Left(lastInst.status)
@@ -147,7 +152,9 @@ object ResourceMgr {
         }
 
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.error(
+          s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
+        )
         Behaviors.unhandled
 
       // no resource instance should exist yet, this is unexpected
@@ -183,7 +190,9 @@ object ResourceMgr {
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.error(s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.error(
+          s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
+        )
         Behaviors.unhandled
       case ResourceInstanceFinished(Status.Timeout) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
@@ -209,7 +218,7 @@ object ResourceMgr {
           finished(ps, status)
         } else {
           val newInstId = currentInstId + 1
-          // create a new instance upon failure and deligate the response to the new instance
+          // create a new instance upon failure and delegate the response to the new instance
           ps.timers.startSingleTimer(CreateResourceInst(replyTo, newInstId), resourceAttemptDelay)
           waiting(ps, resourceAttemptDelay)
         }
@@ -249,10 +258,11 @@ object ResourceMgr {
         )
         Behaviors.unhandled
       case InactiveResourceInstance(instId, status, replyTo) =>
-        ps.ctx.log.error(
-          s"${ps.ctx.self} (waiting) received UNEXPECTED InactiveResourceInstance($instId, $status, $replyTo)"
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (waiting) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
-        Behaviors.unhandled
+        ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
+        Behaviors.same
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Shutdown($status)")
         terminating(ps.ctx, ps, status)
@@ -310,7 +320,9 @@ object ResourceMgr {
         replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (terminating) received CreateResourceInst($replyTo, $instId)")
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (terminating) received CreateResourceInst($replyTo, $instId)"
+        )
         Behaviors.same
       case ResourceInstanceFinished(sts) =>
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
@@ -346,7 +358,15 @@ object ResourceMgr {
     instId: Int
   ): Either[Status.Value, ActorRef[ResourceInstance.Msg]] = {
     val rscIOResult = ResourceIO(
-      ResourceIO.Conf(ps.workflowId, ps.resourceId, ps.resourceName, instId, ps.maxAttempt, ps.rscType, ps.rscSpec)
+      ResourceIO.Conf(
+        ps.workflowId,
+        ps.resourceId,
+        ps.resourceName,
+        instId,
+        ps.maxAttempt,
+        ps.rscType,
+        ps.rscSpec
+      )
     )
 
     rscIOResult match {
