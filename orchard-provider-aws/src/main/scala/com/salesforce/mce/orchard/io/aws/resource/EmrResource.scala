@@ -89,32 +89,7 @@ case class EmrResource(
                   instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
                 )(_.ec2SubnetId(_))
 
-                if (instancesConfig.useEmrInstanceGroup.getOrElse(true)) {
-                  instancesConfig.instanceGroupConfigs
-                    .foldLeft(builder) { case (b, instGroupConfigs) =>
-                      b.instanceGroups(
-                        instGroupConfigs.map { c =>
-                          val builder = InstanceGroupConfig
-                            .builder()
-                            .name(s"orchard-instance-group-${c.instanceRoleType}".toLowerCase)
-                            .instanceRole(c.instanceRoleType)
-                            .instanceCount(c.instanceCount)
-                            .instanceType(c.instanceType)
-
-                          c.instanceBidPrice
-                            .fold(builder.market(MarketType.ON_DEMAND))(p =>
-                              if (lastAttempt && useOnDemandOnLastAttempt) {
-                                builder.market(MarketType.ON_DEMAND)
-                              } else {
-                                builder.bidPrice(p).market(MarketType.SPOT)
-                              }
-                            )
-
-                          builder.build()
-                        }: _*
-                      )
-                    }
-                } else {
+                if (instancesConfig.useEmrInstanceFleet.contains(true)) {
                   instancesConfig.instanceFleetConfigs
                     .foldLeft(builder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
@@ -133,6 +108,7 @@ case class EmrResource(
                           if (lastAttempt && useOnDemandOnLastAttempt) {
                             builder
                               .targetOnDemandCapacity(c.instanceCount)
+                              .instanceFleetType(c.instanceRoleType)
                               .launchSpecifications(
                                 InstanceFleetProvisioningSpecifications
                                   .builder()
@@ -169,6 +145,31 @@ case class EmrResource(
                                   .build()
                               )
                           }
+                          builder.build()
+                        }: _*
+                      )
+                    }
+                } else {
+                  instancesConfig.instanceGroupConfigs
+                    .foldLeft(builder) { case (b, instGroupConfigs) =>
+                      b.instanceGroups(
+                        instGroupConfigs.map { c =>
+                          val builder = InstanceGroupConfig
+                            .builder()
+                            .name(s"orchard-instance-group-${c.instanceRoleType}".toLowerCase)
+                            .instanceRole(c.instanceRoleType)
+                            .instanceCount(c.instanceCount)
+                            .instanceType(c.instanceType)
+
+                          c.instanceBidPrice
+                            .fold(builder.market(MarketType.ON_DEMAND))(p =>
+                              if (lastAttempt && useOnDemandOnLastAttempt) {
+                                builder.market(MarketType.ON_DEMAND)
+                              } else {
+                                builder.bidPrice(p).market(MarketType.SPOT)
+                              }
+                            )
+
                           builder.build()
                         }: _*
                       )
@@ -287,7 +288,7 @@ object EmrResource {
     subnetId: Option[String],
     subnetIds: Option[Seq[String]],
     ec2KeyName: Option[String],
-    useEmrInstanceGroup: Option[Boolean],
+    useEmrInstanceFleet: Option[Boolean],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
     instanceFleetConfigs: Option[Seq[InstanceFleetConfig]],
     emrManagedMasterSecurityGroup: Option[String],
