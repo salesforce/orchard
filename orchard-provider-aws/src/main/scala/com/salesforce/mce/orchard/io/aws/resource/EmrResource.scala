@@ -101,49 +101,37 @@ case class EmrResource(
                               val builder = InstanceTypeConfig
                                 .builder()
                                 .instanceType(i.instanceType)
+                                .weightedCapacity(i.instanceWeightedCapacity)
                               i.instanceBidPrice.foldLeft(builder)(_.bidPrice(_))
-                              i.instanceWeight.foldLeft(builder)(_.weightedCapacity(_))
                               builder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt) {
                             builder
-                              .targetOnDemandCapacity(c.instanceCount)
                               .instanceFleetType(c.instanceRoleType)
                               .launchSpecifications(
                                 InstanceFleetProvisioningSpecifications
                                   .builder()
-                                  .onDemandSpecification(
-                                    OnDemandProvisioningSpecification
-                                      .builder()
-                                      .allocationStrategy(
-                                        instancesConfig.onDemandAllocationStrategy.getOrElse(
-                                          OnDemandProvisioningAllocationStrategy.LOWEST_PRICE.toString
-                                        )
-                                      )
-                                      .build()
-                                  )
+                                  .onDemandSpecification {
+                                    val b = OnDemandProvisioningSpecification.builder()
+                                    instancesConfig.onDemandAllocationStrategy.foldLeft(b)(_.allocationStrategy(_))
+                                    b.build()
+                                  }
                                   .build()
                               )
+                            c.targetOnDemandCapacity.foldLeft(builder)(_.targetOnDemandCapacity(_))
                           } else {
                             builder
-                              .targetSpotCapacity(c.instanceCount)
                               .launchSpecifications(
                                 InstanceFleetProvisioningSpecifications
                                   .builder()
-                                  .spotSpecification(
-                                    SpotProvisioningSpecification
-                                      .builder()
-                                      .timeoutDurationMinutes(10)
-                                      .allocationStrategy(
-                                        instancesConfig.spotAllocationStrategy.getOrElse(
-                                          SpotProvisioningAllocationStrategy.CAPACITY_OPTIMIZED.toString
-                                        )
-                                      )
-                                      .timeoutAction("SWITCH_TO_ON_DEMAND")
-                                      .build()
-                                  )
+                                  .spotSpecification {
+                                    val b = SpotProvisioningSpecification.builder()
+                                    instancesConfig.spotAllocationStrategy.foldLeft(b)(_.allocationStrategy(_))
+                                    b.build()
+                                  }
                                   .build()
                               )
+                            c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
                           }
                           builder.build()
                         }: _*
@@ -267,18 +255,19 @@ object EmrResource {
   implicit val instanceGroupConfigReads: Reads[InstanceGroupConfig] =
     Json.reads[InstanceGroupConfig]
 
-  case class InstanceConfig(
+  case class InstanceTypeConfig(
     instanceType: String,
     instanceBidPrice: Option[String],
-    instanceWeight: Option[Int]
+    instanceWeightedCapacity: Int
   )
-  implicit val instanceInfoReads: Reads[InstanceConfig] =
-    Json.reads[InstanceConfig]
+  implicit val instanceTypeReads: Reads[InstanceTypeConfig] =
+    Json.reads[InstanceTypeConfig]
 
   case class InstanceFleetConfig(
     instanceRoleType: String,
-    instanceCount: Int,
-    instanceConfigs: Seq[InstanceConfig]
+    targetOnDemandCapacity: Option[Int],
+    targetSpotCapacity: Option[Int],
+    instanceConfigs: Seq[InstanceTypeConfig]
   )
 
   implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
