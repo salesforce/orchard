@@ -89,7 +89,7 @@ case class EmrResource(
                   instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
                 )(_.ec2SubnetId(_))
 
-                if (instancesConfig.useEmrInstanceGroup.getOrElse(false)) {
+                if (instancesConfig.useEmrInstanceGroup.getOrElse(true)) {
                   instancesConfig.instanceGroupConfigs
                     .foldLeft(builder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
