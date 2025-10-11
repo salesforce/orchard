@@ -107,30 +107,30 @@ case class EmrResource(
                               builder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt) {
-                            builder
-                              .launchSpecifications(
-                                InstanceFleetProvisioningSpecifications
-                                  .builder()
-                                  .onDemandSpecification {
-                                    val b = OnDemandProvisioningSpecification.builder()
-                                    instancesConfig.onDemandAllocationStrategy.foldLeft(b)(_.allocationStrategy(_))
-                                    b.build()
-                                  }
-                                  .build()
+                            instancesConfig.onDemandAllocationStrategy.foldLeft(builder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .onDemandSpecification(
+                                  OnDemandProvisioningSpecification
+                                    .builder()
+                                    .allocationStrategy(s)
+                                    .build()
+                                ).build()
                               )
+                            }
                             c.targetOnDemandCapacity.foldLeft(builder)(_.targetOnDemandCapacity(_))
                           } else {
-                            builder
-                              .launchSpecifications(
-                                InstanceFleetProvisioningSpecifications
-                                  .builder()
-                                  .spotSpecification {
-                                    val b = SpotProvisioningSpecification.builder()
-                                    instancesConfig.spotAllocationStrategy.foldLeft(b)(_.allocationStrategy(_))
-                                    b.build()
-                                  }
-                                  .build()
+                            instancesConfig.spotAllocationStrategy.foldLeft(builder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .spotSpecification(
+                                  SpotProvisioningSpecification
+                                    .builder()
+                                    .allocationStrategy(s)
+                                    .build()
+                                ).build()
                               )
+                            }
                             c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
                           }
                           builder.build()
