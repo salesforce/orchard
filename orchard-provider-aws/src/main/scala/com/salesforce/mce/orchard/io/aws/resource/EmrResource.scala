@@ -126,6 +126,8 @@ case class EmrResource(
                                 .spotSpecification(
                                   SpotProvisioningSpecification
                                     .builder()
+                                    .timeoutAction(SpotProvisioningTimeoutAction.SWITCH_TO_ON_DEMAND)
+                                    .timeoutDurationMinutes(15)
                                     .allocationStrategy(s)
                                     .build()
                                 ).build()
