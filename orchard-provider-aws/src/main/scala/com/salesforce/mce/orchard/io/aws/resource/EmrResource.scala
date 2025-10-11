@@ -262,7 +262,7 @@ object EmrResource {
     instanceBidPrice: Option[String],
     instanceWeightedCapacity: Int
   )
-  implicit val instanceTypeReads: Reads[InstanceTypeConfig] =
+  implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]
 
   case class InstanceFleetConfig(
