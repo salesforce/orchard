@@ -126,6 +126,8 @@ case class EmrResource(
                                 .spotSpecification(
                                   SpotProvisioningSpecification
                                     .builder()
+                                    .timeoutAction(SpotProvisioningTimeoutAction.SWITCH_TO_ON_DEMAND)
+                                    .timeoutDurationMinutes(15)
                                     .allocationStrategy(s)
                                     .build()
                                 ).build()
@@ -260,7 +262,7 @@ object EmrResource {
     instanceBidPrice: Option[String],
     instanceWeightedCapacity: Int
   )
-  implicit val instanceTypeReads: Reads[InstanceTypeConfig] =
+  implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]
 
   case class InstanceFleetConfig(
