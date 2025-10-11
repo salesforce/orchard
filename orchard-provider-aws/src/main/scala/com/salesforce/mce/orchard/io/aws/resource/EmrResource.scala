@@ -97,6 +97,7 @@ case class EmrResource(
                           val builder = InstanceFleetConfig
                             .builder()
                             .name(s"orchard-instance-fleet-${c.instanceRoleType}".toLowerCase)
+                            .instanceFleetType(c.instanceRoleType)
                             .instanceTypeConfigs(c.instanceConfigs.map { i =>
                               val builder = InstanceTypeConfig
                                 .builder()
@@ -107,7 +108,6 @@ case class EmrResource(
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt) {
                             builder
-                              .instanceFleetType(c.instanceRoleType)
                               .launchSpecifications(
                                 InstanceFleetProvisioningSpecifications
                                   .builder()
