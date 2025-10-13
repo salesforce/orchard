@@ -85,11 +85,8 @@ case class EmrResource(
                   .builder()
                   .keepJobFlowAliveWhenNoSteps(true)
 
-                instancesConfig.subnetId.foldLeft(
+                if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
                   instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
-                )(_.ec2SubnetId(_))
-
-                if (instancesConfig.useEmrInstanceFleet.contains(true)) {
                   instancesConfig.instanceFleetConfigs
                     .foldLeft(builder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
@@ -102,37 +99,13 @@ case class EmrResource(
                               val builder = InstanceTypeConfig
                                 .builder()
                                 .instanceType(i.instanceType)
-                                .weightedCapacity(i.instanceWeightedCapacity)
-                              i.instanceBidPrice.foldLeft(builder)(_.bidPrice(_))
+                              i.bidPrice.foldLeft(builder)(_.bidPrice(_))
+                              i.weightedCapacity.foldLeft(builder)(_.weightedCapacity(_))
                               builder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt) {
-                            instancesConfig.onDemandAllocationStrategy.foldLeft(builder){ case (b, s) =>
-                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
-                                .builder()
-                                .onDemandSpecification(
-                                  OnDemandProvisioningSpecification
-                                    .builder()
-                                    .allocationStrategy(s)
-                                    .build()
-                                ).build()
-                              )
-                            }
                             c.targetOnDemandCapacity.foldLeft(builder)(_.targetOnDemandCapacity(_))
                           } else {
-                            instancesConfig.spotAllocationStrategy.foldLeft(builder){ case (b, s) =>
-                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
-                                .builder()
-                                .spotSpecification(
-                                  SpotProvisioningSpecification
-                                    .builder()
-                                    .timeoutAction(SpotProvisioningTimeoutAction.SWITCH_TO_ON_DEMAND)
-                                    .timeoutDurationMinutes(15)
-                                    .allocationStrategy(s)
-                                    .build()
-                                ).build()
-                              )
-                            }
                             c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
                           }
                           builder.build()
@@ -140,6 +113,7 @@ case class EmrResource(
                       )
                     }
                 } else {
+                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
                   instancesConfig.instanceGroupConfigs
                     .foldLeft(builder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
@@ -259,8 +233,8 @@ object EmrResource {
 
   case class InstanceTypeConfig(
     instanceType: String,
-    instanceBidPrice: Option[String],
-    instanceWeightedCapacity: Int
+    bidPrice: Option[String],
+    weightedCapacity: Option[Int]
   )
   implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]
@@ -271,7 +245,6 @@ object EmrResource {
     targetSpotCapacity: Option[Int],
     instanceConfigs: Seq[InstanceTypeConfig]
   )
-
   implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
     Json.reads[InstanceFleetConfig]
 
@@ -279,16 +252,13 @@ object EmrResource {
     subnetId: Option[String],
     subnetIds: Option[Seq[String]],
     ec2KeyName: Option[String],
-    useEmrInstanceFleet: Option[Boolean],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
     instanceFleetConfigs: Option[Seq[InstanceFleetConfig]],
     emrManagedMasterSecurityGroup: Option[String],
     emrManagedSlaveSecurityGroup: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
     additionalSlaveSecurityGroups: Option[Seq[String]],
-    serviceAccessSecurityGroup: Option[String],
-    spotAllocationStrategy: Option[String],
-    onDemandAllocationStrategy: Option[String]
+    serviceAccessSecurityGroup: Option[String]
   )
   implicit val instancesConfigReads: Reads[InstancesConfig] = Json.reads[InstancesConfig]
 
