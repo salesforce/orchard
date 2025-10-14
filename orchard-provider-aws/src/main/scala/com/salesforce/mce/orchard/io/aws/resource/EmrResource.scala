@@ -103,8 +103,8 @@ case class EmrResource(
                               i.weightedCapacity.foldLeft(builder)(_.weightedCapacity(_))
                               builder.build()
                             }: _*)
-                          if (lastAttempt && useOnDemandOnLastAttempt) {
-                            c.targetOnDemandCapacity.foldLeft(builder)(_.targetOnDemandCapacity(_))
+                          if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
+                            builder.targetOnDemandCapacity(c.targetOnDemandCapacity)
                           } else {
                             c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
                           }
@@ -113,7 +113,7 @@ case class EmrResource(
                       )
                     }
                 } else {
-                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
+                  builder.ec2SubnetId(instancesConfig.subnetIds.head)
                   instancesConfig.instanceGroupConfigs
                     .foldLeft(builder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
@@ -241,7 +241,7 @@ object EmrResource {
 
   case class InstanceFleetConfig(
     instanceRoleType: String,
-    targetOnDemandCapacity: Option[Int],
+    targetOnDemandCapacity: Int,
     targetSpotCapacity: Option[Int],
     instanceConfigs: Seq[InstanceTypeConfig]
   )
@@ -249,8 +249,7 @@ object EmrResource {
     Json.reads[InstanceFleetConfig]
 
   case class InstancesConfig(
-    subnetId: Option[String],
-    subnetIds: Option[Seq[String]],
+    subnetIds: Seq[String],
     ec2KeyName: Option[String],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
     instanceFleetConfigs: Option[Seq[InstanceFleetConfig]],
