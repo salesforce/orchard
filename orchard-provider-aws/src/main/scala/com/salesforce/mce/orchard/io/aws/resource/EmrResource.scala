@@ -86,7 +86,7 @@ case class EmrResource(
                   .keepJobFlowAliveWhenNoSteps(true)
 
                 if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
-                  instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
+                  builder.ec2SubnetIds(instancesConfig.subnetIds: _*)
                   instancesConfig.instanceFleetConfigs
                     .foldLeft(builder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
