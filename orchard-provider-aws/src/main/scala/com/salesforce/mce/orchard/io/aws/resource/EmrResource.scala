@@ -86,7 +86,7 @@ case class EmrResource(
                   .keepJobFlowAliveWhenNoSteps(true)
 
                 if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
-                  builder.ec2SubnetIds(instancesConfig.subnetIds: _*)
+                  instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
                   instancesConfig.instanceFleetConfigs
                     .foldLeft(builder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
@@ -113,7 +113,7 @@ case class EmrResource(
                       )
                     }
                 } else {
-                  builder.ec2SubnetId(instancesConfig.subnetIds.head)
+                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
                   instancesConfig.instanceGroupConfigs
                     .foldLeft(builder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
@@ -249,7 +249,8 @@ object EmrResource {
     Json.reads[InstanceFleetConfig]
 
   case class InstancesConfig(
-    subnetIds: Seq[String],
+    subnetId: Option[String],
+    subnetIds: Option[Seq[String]],
     ec2KeyName: Option[String],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
     instanceFleetConfigs: Option[Seq[InstanceFleetConfig]],
