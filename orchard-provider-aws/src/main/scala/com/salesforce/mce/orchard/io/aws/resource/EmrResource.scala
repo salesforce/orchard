@@ -122,7 +122,8 @@ case class EmrResource(
                               b.launchSpecifications(InstanceFleetProvisioningSpecifications
                                 .builder()
                                 .spotSpecification{
-                                  val builder = SpotProvisioningSpecification.builder()
+                                  val builder = SpotProvisioningSpecification
+                                    .builder()
                                     .timeoutAction(s.timeoutAction)
                                     .timeoutDurationMinutes(s.timeoutDurationMinutes)
                                   s.allocationStrategy.foldLeft(builder)(_.allocationStrategy(_))
