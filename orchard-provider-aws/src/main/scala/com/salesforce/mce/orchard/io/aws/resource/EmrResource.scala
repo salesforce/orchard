@@ -81,31 +81,31 @@ case class EmrResource(
               .tags(awsTags: _*)
               .configurations(EmrResource.asConfigurations(spec.configurations): _*)
               .instances {
-                val builder = JobFlowInstancesConfig
+                val jfcBuilder = JobFlowInstancesConfig
                   .builder()
                   .keepJobFlowAliveWhenNoSteps(true)
 
                 if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
-                  instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
+                  instancesConfig.subnetIds.foldLeft(jfcBuilder)(_.ec2SubnetIds(_: _*))
                   instancesConfig.instanceFleetConfigs
-                    .foldLeft(builder) { case (b, instFleetConfigs) =>
+                    .foldLeft(jfcBuilder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
                         instFleetConfigs.map { c =>
-                          val builder = InstanceFleetConfig
+                          val ifcBuilder = InstanceFleetConfig
                             .builder()
                             .name(s"orchard-instance-fleet-${c.instanceRoleType}".toLowerCase)
                             .instanceFleetType(c.instanceRoleType)
                             .instanceTypeConfigs(c.instanceConfigs.map { i =>
-                              val builder = InstanceTypeConfig
+                              val itcBuilder = InstanceTypeConfig
                                 .builder()
                                 .instanceType(i.instanceType)
-                              i.bidPrice.foldLeft(builder)(_.bidPrice(_))
-                              i.weightedCapacity.foldLeft(builder)(_.weightedCapacity(_))
-                              builder.build()
+                              i.bidPrice.foldLeft(itcBuilder)(_.bidPrice(_))
+                              i.weightedCapacity.foldLeft(itcBuilder)(_.weightedCapacity(_))
+                              itcBuilder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
-                            builder.targetOnDemandCapacity(c.targetOnDemandCapacity)
-                            c.onDemandProvisioningSpecification.foldLeft(builder){ case (b, s) =>
+                            ifcBuilder.targetOnDemandCapacity(c.targetOnDemandCapacity)
+                            c.onDemandProvisioningSpecification.foldLeft(ifcBuilder){ case (b, s) =>
                               b.launchSpecifications(InstanceFleetProvisioningSpecifications
                                 .builder()
                                 .onDemandSpecification(
@@ -117,32 +117,32 @@ case class EmrResource(
                               )
                             }
                           } else {
-                            c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
-                            c.spotProvisioningSpecification.foldLeft(builder){ case (b, s) =>
+                            c.targetSpotCapacity.foldLeft(ifcBuilder)(_.targetSpotCapacity(_))
+                            c.spotProvisioningSpecification.foldLeft(ifcBuilder){ case (b, s) =>
                               b.launchSpecifications(InstanceFleetProvisioningSpecifications
                                 .builder()
                                 .spotSpecification{
-                                  val builder = SpotProvisioningSpecification
+                                  val spsBuilder = SpotProvisioningSpecification
                                     .builder()
                                     .timeoutAction(s.timeoutAction)
                                     .timeoutDurationMinutes(s.timeoutDurationMinutes)
-                                  s.allocationStrategy.foldLeft(builder)(_.allocationStrategy(_))
-                                  builder.build()
+                                  s.allocationStrategy.foldLeft(spsBuilder)(_.allocationStrategy(_))
+                                  spsBuilder.build()
                                 }.build()
                               )
                             }
                           }
-                          builder.build()
+                          ifcBuilder.build()
                         }: _*
                       )
                     }
                 } else {
-                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
+                  instancesConfig.subnetId.foldLeft(jfcBuilder)(_.ec2SubnetId(_))
                   instancesConfig.instanceGroupConfigs
-                    .foldLeft(builder) { case (b, instGroupConfigs) =>
+                    .foldLeft(jfcBuilder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
                         instGroupConfigs.map { c =>
-                          val builder = InstanceGroupConfig
+                          val igcBuilder = InstanceGroupConfig
                             .builder()
                             .name(s"orchard-instance-group-${c.instanceRoleType}".toLowerCase)
                             .instanceRole(c.instanceRoleType)
@@ -150,34 +150,34 @@ case class EmrResource(
                             .instanceType(c.instanceType)
 
                           c.instanceBidPrice
-                            .fold(builder.market(MarketType.ON_DEMAND))(p =>
+                            .fold(igcBuilder.market(MarketType.ON_DEMAND))(p =>
                               if (lastAttempt && useOnDemandOnLastAttempt) {
-                                builder.market(MarketType.ON_DEMAND)
+                                igcBuilder.market(MarketType.ON_DEMAND)
                               } else {
-                                builder.bidPrice(p).market(MarketType.SPOT)
+                                igcBuilder.bidPrice(p).market(MarketType.SPOT)
                               }
                             )
 
-                          builder.build()
+                          igcBuilder.build()
                         }: _*
                       )
                     }
                 }
 
                 instancesConfig.ec2KeyName
-                  .foldLeft(builder)(_.ec2KeyName(_))
+                  .foldLeft(jfcBuilder)(_.ec2KeyName(_))
                 instancesConfig.emrManagedMasterSecurityGroup
-                  .foldLeft(builder)(_.emrManagedMasterSecurityGroup(_))
+                  .foldLeft(jfcBuilder)(_.emrManagedMasterSecurityGroup(_))
                 instancesConfig.emrManagedSlaveSecurityGroup
-                  .foldLeft(builder)(_.emrManagedSlaveSecurityGroup(_))
+                  .foldLeft(jfcBuilder)(_.emrManagedSlaveSecurityGroup(_))
                 instancesConfig.additionalMasterSecurityGroups
-                  .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
+                  .foldLeft(jfcBuilder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
-                  .foldLeft(builder)(_.additionalSlaveSecurityGroups(_: _*))
+                  .foldLeft(jfcBuilder)(_.additionalSlaveSecurityGroups(_: _*))
                 instancesConfig.serviceAccessSecurityGroup
-                  .foldLeft(builder)(_.serviceAccessSecurityGroup(_))
+                  .foldLeft(jfcBuilder)(_.serviceAccessSecurityGroup(_))
 
-                builder.build()
+                jfcBuilder.build()
               }
           )((r, uri) => r.logUri(uri))
 
