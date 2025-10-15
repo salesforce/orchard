@@ -3,7 +3,7 @@ val slickVersion = "3.5.2"
 val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.4"
 val jacksonVersion = "2.18.0"
-val awsVersion = "2.32.+"
+val awsVersion = "2.34.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -21,7 +21,7 @@ val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.19" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "7.0.1" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.17"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.19"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
