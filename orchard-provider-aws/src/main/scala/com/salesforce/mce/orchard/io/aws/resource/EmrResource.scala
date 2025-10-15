@@ -53,7 +53,7 @@ case class EmrResource(
 
     val response = Client
       .emr()
-      .runJobFlow{
+      .runJobFlow {
         val req = loggingUriBase
           .foldLeft(
             RunJobFlowRequest
@@ -83,33 +83,62 @@ case class EmrResource(
               .instances {
                 val builder = JobFlowInstancesConfig
                   .builder()
-                  .ec2SubnetId(instancesConfig.subnetId)
                   .keepJobFlowAliveWhenNoSteps(true)
 
-                instancesConfig.instanceGroupConfigs
-                  .foldLeft(builder) { case (b, instGroupConfigs) =>
-                    b.instanceGroups(
-                      instGroupConfigs.map { c =>
-                        val builder = InstanceGroupConfig
-                          .builder()
-                          .name(s"orchard-${c.instanceRoleType}".toLowerCase)
-                          .instanceRole(c.instanceRoleType)
-                          .instanceCount(c.instanceCount)
-                          .instanceType(c.instanceType)
+                if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
+                  instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
+                  instancesConfig.instanceFleetConfigs
+                    .foldLeft(builder) { case (b, instFleetConfigs) =>
+                      b.instanceFleets(
+                        instFleetConfigs.map { c =>
+                          val builder = InstanceFleetConfig
+                            .builder()
+                            .name(s"orchard-instance-fleet-${c.instanceRoleType}".toLowerCase)
+                            .instanceFleetType(c.instanceRoleType)
+                            .instanceTypeConfigs(c.instanceConfigs.map { i =>
+                              val builder = InstanceTypeConfig
+                                .builder()
+                                .instanceType(i.instanceType)
+                              i.bidPrice.foldLeft(builder)(_.bidPrice(_))
+                              i.weightedCapacity.foldLeft(builder)(_.weightedCapacity(_))
+                              builder.build()
+                            }: _*)
+                          if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
+                            builder.targetOnDemandCapacity(c.targetOnDemandCapacity)
+                          } else {
+                            c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
+                          }
+                          builder.build()
+                        }: _*
+                      )
+                    }
+                } else {
+                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
+                  instancesConfig.instanceGroupConfigs
+                    .foldLeft(builder) { case (b, instGroupConfigs) =>
+                      b.instanceGroups(
+                        instGroupConfigs.map { c =>
+                          val builder = InstanceGroupConfig
+                            .builder()
+                            .name(s"orchard-instance-group-${c.instanceRoleType}".toLowerCase)
+                            .instanceRole(c.instanceRoleType)
+                            .instanceCount(c.instanceCount)
+                            .instanceType(c.instanceType)
 
-                        c.instanceBidPrice
-                          .fold(builder.market(MarketType.ON_DEMAND))(p =>
-                            if (lastAttempt && useOnDemandOnLastAttempt) {
-                              builder.market(MarketType.ON_DEMAND)
-                            } else {
-                              builder.bidPrice(p).market(MarketType.SPOT)
-                            }
-                          )
+                          c.instanceBidPrice
+                            .fold(builder.market(MarketType.ON_DEMAND))(p =>
+                              if (lastAttempt && useOnDemandOnLastAttempt) {
+                                builder.market(MarketType.ON_DEMAND)
+                              } else {
+                                builder.bidPrice(p).market(MarketType.SPOT)
+                              }
+                            )
 
-                        builder.build()
-                      }: _*
-                    )
-                  }
+                          builder.build()
+                        }: _*
+                      )
+                    }
+                }
 
                 instancesConfig.ec2KeyName
                   .foldLeft(builder)(_.ec2KeyName(_))
@@ -130,7 +159,7 @@ case class EmrResource(
 
         spec.customAmiId.foldLeft(req)(_.customAmiId(_))
         req.build()
-    }
+      }
     Json.toJson(EmrResource.InstSpec(response.jobFlowId()))
   }
 
@@ -202,10 +231,29 @@ object EmrResource {
   implicit val instanceGroupConfigReads: Reads[InstanceGroupConfig] =
     Json.reads[InstanceGroupConfig]
 
+  case class InstanceTypeConfig(
+    instanceType: String,
+    bidPrice: Option[String],
+    weightedCapacity: Option[Int]
+  )
+  implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
+    Json.reads[InstanceTypeConfig]
+
+  case class InstanceFleetConfig(
+    instanceRoleType: String,
+    targetOnDemandCapacity: Int,
+    targetSpotCapacity: Option[Int],
+    instanceConfigs: Seq[InstanceTypeConfig]
+  )
+  implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
+    Json.reads[InstanceFleetConfig]
+
   case class InstancesConfig(
-    subnetId: String,
+    subnetId: Option[String],
+    subnetIds: Option[Seq[String]],
     ec2KeyName: Option[String],
     instanceGroupConfigs: Option[Seq[InstanceGroupConfig]],
+    instanceFleetConfigs: Option[Seq[InstanceFleetConfig]],
     emrManagedMasterSecurityGroup: Option[String],
     emrManagedSlaveSecurityGroup: Option[String],
     additionalMasterSecurityGroups: Option[Seq[String]],
