@@ -105,8 +105,31 @@ case class EmrResource(
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
                             builder.targetOnDemandCapacity(c.targetOnDemandCapacity)
+                            c.onDemandProvisioningSpecification.foldLeft(builder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .onDemandSpecification(
+                                  OnDemandProvisioningSpecification
+                                    .builder()
+                                    .allocationStrategy(s.allocationStrategy)
+                                    .build()
+                                ).build()
+                              )
+                            }
                           } else {
                             c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
+                            c.spotProvisioningSpecification.foldLeft(builder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .spotSpecification{
+                                  val builder = SpotProvisioningSpecification.builder()
+                                    .timeoutAction(s.timeoutAction)
+                                    .timeoutDurationMinutes(s.timeoutDurationMinutes)
+                                  s.allocationStrategy.foldLeft(builder)(_.allocationStrategy(_))
+                                  builder.build()
+                                }.build()
+                              )
+                            }
                           }
                           builder.build()
                         }: _*
@@ -243,10 +266,24 @@ object EmrResource {
     instanceRoleType: String,
     targetOnDemandCapacity: Int,
     targetSpotCapacity: Option[Int],
+    spotProvisioningSpecification: Option[SpotProvisioningSpecification],
+    onDemandProvisioningSpecification: Option[OnDemandProvisioningSpecification],
     instanceConfigs: Seq[InstanceTypeConfig]
   )
   implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
     Json.reads[InstanceFleetConfig]
+
+  case class OnDemandProvisioningSpecification(allocationStrategy: String)
+  implicit val onDemandProvisioningSpecReads: Reads[OnDemandProvisioningSpecification] =
+    Json.reads[OnDemandProvisioningSpecification]
+
+  case class SpotProvisioningSpecification(
+    timeoutAction: String,
+    timeoutDurationMinutes: Int,
+    allocationStrategy: Option[String]
+  )
+  implicit val spotProvisioningSpecReads: Reads[SpotProvisioningSpecification] =
+    Json.reads[SpotProvisioningSpecification]
 
   case class InstancesConfig(
     subnetId: Option[String],
