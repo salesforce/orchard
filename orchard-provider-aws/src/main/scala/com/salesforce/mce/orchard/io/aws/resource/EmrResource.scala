@@ -81,44 +81,68 @@ case class EmrResource(
               .tags(awsTags: _*)
               .configurations(EmrResource.asConfigurations(spec.configurations): _*)
               .instances {
-                val builder = JobFlowInstancesConfig
+                val jficBuilder = JobFlowInstancesConfig
                   .builder()
                   .keepJobFlowAliveWhenNoSteps(true)
 
                 if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
-                  instancesConfig.subnetIds.foldLeft(builder)(_.ec2SubnetIds(_: _*))
+                  instancesConfig.subnetIds.foldLeft(jficBuilder)(_.ec2SubnetIds(_: _*))
                   instancesConfig.instanceFleetConfigs
-                    .foldLeft(builder) { case (b, instFleetConfigs) =>
+                    .foldLeft(jficBuilder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
                         instFleetConfigs.map { c =>
-                          val builder = InstanceFleetConfig
+                          val ifcBuilder = InstanceFleetConfig
                             .builder()
                             .name(s"orchard-instance-fleet-${c.instanceRoleType}".toLowerCase)
                             .instanceFleetType(c.instanceRoleType)
                             .instanceTypeConfigs(c.instanceConfigs.map { i =>
-                              val builder = InstanceTypeConfig
+                              val itcBuilder = InstanceTypeConfig
                                 .builder()
                                 .instanceType(i.instanceType)
-                              i.bidPrice.foldLeft(builder)(_.bidPrice(_))
-                              i.weightedCapacity.foldLeft(builder)(_.weightedCapacity(_))
-                              builder.build()
+                              i.bidPrice.foldLeft(itcBuilder)(_.bidPrice(_))
+                              i.weightedCapacity.foldLeft(itcBuilder)(_.weightedCapacity(_))
+                              itcBuilder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
-                            builder.targetOnDemandCapacity(c.targetOnDemandCapacity)
+                            ifcBuilder.targetOnDemandCapacity(c.targetOnDemandCapacity)
+                            c.onDemandProvisioningSpecification.foldLeft(ifcBuilder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .onDemandSpecification(
+                                  OnDemandProvisioningSpecification
+                                    .builder()
+                                    .allocationStrategy(s.allocationStrategy)
+                                    .build()
+                                ).build()
+                              )
+                            }
                           } else {
-                            c.targetSpotCapacity.foldLeft(builder)(_.targetSpotCapacity(_))
+                            c.targetSpotCapacity.foldLeft(ifcBuilder)(_.targetSpotCapacity(_))
+                            c.spotProvisioningSpecification.foldLeft(ifcBuilder){ case (b, s) =>
+                              b.launchSpecifications(InstanceFleetProvisioningSpecifications
+                                .builder()
+                                .spotSpecification{
+                                  val spsBuilder = SpotProvisioningSpecification
+                                    .builder()
+                                    .timeoutAction(s.timeoutAction)
+                                    .timeoutDurationMinutes(s.timeoutDurationMinutes)
+                                  s.allocationStrategy.foldLeft(spsBuilder)(_.allocationStrategy(_))
+                                  spsBuilder.build()
+                                }.build()
+                              )
+                            }
                           }
-                          builder.build()
+                          ifcBuilder.build()
                         }: _*
                       )
                     }
                 } else {
-                  instancesConfig.subnetId.foldLeft(builder)(_.ec2SubnetId(_))
+                  instancesConfig.subnetId.foldLeft(jficBuilder)(_.ec2SubnetId(_))
                   instancesConfig.instanceGroupConfigs
-                    .foldLeft(builder) { case (b, instGroupConfigs) =>
+                    .foldLeft(jficBuilder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
                         instGroupConfigs.map { c =>
-                          val builder = InstanceGroupConfig
+                          val igcBuilder = InstanceGroupConfig
                             .builder()
                             .name(s"orchard-instance-group-${c.instanceRoleType}".toLowerCase)
                             .instanceRole(c.instanceRoleType)
@@ -126,34 +150,34 @@ case class EmrResource(
                             .instanceType(c.instanceType)
 
                           c.instanceBidPrice
-                            .fold(builder.market(MarketType.ON_DEMAND))(p =>
+                            .fold(igcBuilder.market(MarketType.ON_DEMAND))(p =>
                               if (lastAttempt && useOnDemandOnLastAttempt) {
-                                builder.market(MarketType.ON_DEMAND)
+                                igcBuilder.market(MarketType.ON_DEMAND)
                               } else {
-                                builder.bidPrice(p).market(MarketType.SPOT)
+                                igcBuilder.bidPrice(p).market(MarketType.SPOT)
                               }
                             )
 
-                          builder.build()
+                          igcBuilder.build()
                         }: _*
                       )
                     }
                 }
 
                 instancesConfig.ec2KeyName
-                  .foldLeft(builder)(_.ec2KeyName(_))
+                  .foldLeft(jficBuilder)(_.ec2KeyName(_))
                 instancesConfig.emrManagedMasterSecurityGroup
-                  .foldLeft(builder)(_.emrManagedMasterSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.emrManagedMasterSecurityGroup(_))
                 instancesConfig.emrManagedSlaveSecurityGroup
-                  .foldLeft(builder)(_.emrManagedSlaveSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.emrManagedSlaveSecurityGroup(_))
                 instancesConfig.additionalMasterSecurityGroups
-                  .foldLeft(builder)(_.additionalMasterSecurityGroups(_: _*))
+                  .foldLeft(jficBuilder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
-                  .foldLeft(builder)(_.additionalSlaveSecurityGroups(_: _*))
+                  .foldLeft(jficBuilder)(_.additionalSlaveSecurityGroups(_: _*))
                 instancesConfig.serviceAccessSecurityGroup
-                  .foldLeft(builder)(_.serviceAccessSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.serviceAccessSecurityGroup(_))
 
-                builder.build()
+                jficBuilder.build()
               }
           )((r, uri) => r.logUri(uri))
 
@@ -239,10 +263,24 @@ object EmrResource {
   implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]
 
+  case class OnDemandProvisioningSpecification(allocationStrategy: String)
+  implicit val onDemandProvisioningSpecReads: Reads[OnDemandProvisioningSpecification] =
+    Json.reads[OnDemandProvisioningSpecification]
+
+  case class SpotProvisioningSpecification(
+    timeoutAction: String,
+    timeoutDurationMinutes: Int,
+    allocationStrategy: Option[String]
+  )
+  implicit val spotProvisioningSpecReads: Reads[SpotProvisioningSpecification] =
+    Json.reads[SpotProvisioningSpecification]
+
   case class InstanceFleetConfig(
     instanceRoleType: String,
     targetOnDemandCapacity: Int,
     targetSpotCapacity: Option[Int],
+    spotProvisioningSpecification: Option[SpotProvisioningSpecification],
+    onDemandProvisioningSpecification: Option[OnDemandProvisioningSpecification],
     instanceConfigs: Seq[InstanceTypeConfig]
   )
   implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
