@@ -263,17 +263,6 @@ object EmrResource {
   implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]
 
-  case class InstanceFleetConfig(
-    instanceRoleType: String,
-    targetOnDemandCapacity: Int,
-    targetSpotCapacity: Option[Int],
-    spotProvisioningSpecification: Option[SpotProvisioningSpecification],
-    onDemandProvisioningSpecification: Option[OnDemandProvisioningSpecification],
-    instanceConfigs: Seq[InstanceTypeConfig]
-  )
-  implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
-    Json.reads[InstanceFleetConfig]
-
   case class OnDemandProvisioningSpecification(allocationStrategy: String)
   implicit val onDemandProvisioningSpecReads: Reads[OnDemandProvisioningSpecification] =
     Json.reads[OnDemandProvisioningSpecification]
@@ -285,6 +274,17 @@ object EmrResource {
   )
   implicit val spotProvisioningSpecReads: Reads[SpotProvisioningSpecification] =
     Json.reads[SpotProvisioningSpecification]
+
+  case class InstanceFleetConfig(
+    instanceRoleType: String,
+    targetOnDemandCapacity: Int,
+    targetSpotCapacity: Option[Int],
+    spotProvisioningSpecification: Option[SpotProvisioningSpecification],
+    onDemandProvisioningSpecification: Option[OnDemandProvisioningSpecification],
+    instanceConfigs: Seq[InstanceTypeConfig]
+  )
+  implicit val instanceFleetConfigReads: Reads[InstanceFleetConfig] =
+    Json.reads[InstanceFleetConfig]
 
   case class InstancesConfig(
     subnetId: Option[String],
