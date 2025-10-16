@@ -81,14 +81,14 @@ case class EmrResource(
               .tags(awsTags: _*)
               .configurations(EmrResource.asConfigurations(spec.configurations): _*)
               .instances {
-                val jfcBuilder = JobFlowInstancesConfig
+                val jficBuilder = JobFlowInstancesConfig
                   .builder()
                   .keepJobFlowAliveWhenNoSteps(true)
 
                 if (instancesConfig.instanceFleetConfigs.exists(_.nonEmpty)) {
-                  instancesConfig.subnetIds.foldLeft(jfcBuilder)(_.ec2SubnetIds(_: _*))
+                  instancesConfig.subnetIds.foldLeft(jficBuilder)(_.ec2SubnetIds(_: _*))
                   instancesConfig.instanceFleetConfigs
-                    .foldLeft(jfcBuilder) { case (b, instFleetConfigs) =>
+                    .foldLeft(jficBuilder) { case (b, instFleetConfigs) =>
                       b.instanceFleets(
                         instFleetConfigs.map { c =>
                           val ifcBuilder = InstanceFleetConfig
@@ -137,9 +137,9 @@ case class EmrResource(
                       )
                     }
                 } else {
-                  instancesConfig.subnetId.foldLeft(jfcBuilder)(_.ec2SubnetId(_))
+                  instancesConfig.subnetId.foldLeft(jficBuilder)(_.ec2SubnetId(_))
                   instancesConfig.instanceGroupConfigs
-                    .foldLeft(jfcBuilder) { case (b, instGroupConfigs) =>
+                    .foldLeft(jficBuilder) { case (b, instGroupConfigs) =>
                       b.instanceGroups(
                         instGroupConfigs.map { c =>
                           val igcBuilder = InstanceGroupConfig
@@ -165,19 +165,19 @@ case class EmrResource(
                 }
 
                 instancesConfig.ec2KeyName
-                  .foldLeft(jfcBuilder)(_.ec2KeyName(_))
+                  .foldLeft(jficBuilder)(_.ec2KeyName(_))
                 instancesConfig.emrManagedMasterSecurityGroup
-                  .foldLeft(jfcBuilder)(_.emrManagedMasterSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.emrManagedMasterSecurityGroup(_))
                 instancesConfig.emrManagedSlaveSecurityGroup
-                  .foldLeft(jfcBuilder)(_.emrManagedSlaveSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.emrManagedSlaveSecurityGroup(_))
                 instancesConfig.additionalMasterSecurityGroups
-                  .foldLeft(jfcBuilder)(_.additionalMasterSecurityGroups(_: _*))
+                  .foldLeft(jficBuilder)(_.additionalMasterSecurityGroups(_: _*))
                 instancesConfig.additionalSlaveSecurityGroups
-                  .foldLeft(jfcBuilder)(_.additionalSlaveSecurityGroups(_: _*))
+                  .foldLeft(jficBuilder)(_.additionalSlaveSecurityGroups(_: _*))
                 instancesConfig.serviceAccessSecurityGroup
-                  .foldLeft(jfcBuilder)(_.serviceAccessSecurityGroup(_))
+                  .foldLeft(jficBuilder)(_.serviceAccessSecurityGroup(_))
 
-                jfcBuilder.build()
+                jficBuilder.build()
               }
           )((r, uri) => r.logUri(uri))
 
