@@ -1,8 +1,8 @@
 val slickVersion = "3.5.2"
 // make sure this is the same as the playWS's dependency
 val pekkoVersion = "1.0.3"
-val playJsonVersion = "3.0.4"
-val jacksonVersion = "2.18.0"
+val playJsonVersion = "3.0.6"
+val jacksonVersion = "2.18.5"
 val awsVersion = "2.34.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
@@ -30,7 +30,7 @@ val prometheusHotSpot = "io.prometheus"              % "simpleclient_hotspot"   
 
 lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint"), // , "-Xfatal-warnings"),
-  scalaVersion := "2.13.15",
+  scalaVersion := "2.13.18",
   libraryDependencies += scalaTestArtifact,
   organization := "com.salesforce.mce",
   headerLicense := Some(HeaderLicense.Custom(

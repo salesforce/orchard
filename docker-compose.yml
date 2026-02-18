@@ -22,11 +22,16 @@ services:
         # command:
         #   sbt orchardWS/run
   db:
-    image: postgres
+    image: postgres:17
     volumes:
       - orchard-postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: "${ORCHARD_PG_SECRET}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   flyway:
     image: flyway/flyway
     volumes:
@@ -36,7 +41,8 @@ services:
       FLYWAY_USER: "postgres"
       FLYWAY_PASSWORD: "${ORCHARD_PG_SECRET}"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     command:
       migrate
 
