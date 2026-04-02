@@ -3,8 +3,7 @@ val slickVersion = "3.5.2"
 val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.6"
 val jacksonVersion = "2.18.6"
-val nettyVersion = "4.1.132.Final"
-val awsVersion = "2.41.+"
+val awsVersion = "2.42.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -73,9 +72,7 @@ lazy val orchardCore = (project in file("orchard-core")).
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
-      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion
     )
   )
 
@@ -102,9 +99,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
@@ -126,9 +121,7 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
-      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion
     )
   ).
   dependsOn(orchardCore)
