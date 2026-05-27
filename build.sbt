@@ -4,7 +4,7 @@ val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.6"
 val jacksonVersion = "2.21.2"
 val jacksonAnnotationsVersion = "2.21"
-val awsVersion = "2.42.+"
+val awsVersion = "2.44.+"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -15,7 +15,7 @@ val awsSts            = "software.amazon.awssdk"   % "sts"                      
 val awsSns            = "software.amazon.awssdk"   % "sns"                        % awsVersion
 val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
 val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
-val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.7"
+val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.11"
 val playJson          = "org.playframework"       %% "play-json"                  % playJsonVersion
 val pekkoActor        = "org.apache.pekko"        %% "pekko-actor-typed"          % pekkoVersion
 val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"  % pekkoVersion % Test
