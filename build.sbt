@@ -4,7 +4,7 @@ val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.6"
 val jacksonVersion = "2.21.4"
 val jacksonAnnotationsVersion = "2.21"
-val awsVersion = "2.46.+"
+val awsVersion = "2.47.0"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
