@@ -2,9 +2,9 @@ val slickVersion = "3.5.2"
 // make sure this is the same as the playWS's dependency
 val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.6"
-val jacksonVersion = "2.21.5"
+val jacksonVersion = "2.21.6"
 val jacksonAnnotationsVersion = "2.21"
-val awsVersion = "2.47.5"
+val awsVersion = "2.54.5"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
