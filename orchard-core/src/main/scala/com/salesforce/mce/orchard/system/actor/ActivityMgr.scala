@@ -12,7 +12,7 @@ import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import play.api.libs.json.JsValue
 
 import com.salesforce.mce.orchard.OrchardSettings
-import com.salesforce.mce.orchard.db.{ActivityQuery, OrchardDatabase}
+import com.salesforce.mce.orchard.db.{ActivityQuery, OrchardDatabase, ResourceQuery}
 import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.util.Policy
 
@@ -84,6 +84,10 @@ object ActivityMgr {
     // activity started by some other actor, but for some reason, it no longer supervises the
     // activity
     case Status.Running =>
+      val resourceStatus = ps.database
+        .sync(new ResourceQuery(ps.workflowId, ps.resourceId).get())
+        .map(_.status)
+        .getOrElse(Status.Failed)
       val attmptOpt = ps.database
         .sync(ps.activityQuery.attempts())
         .sortBy(_.attempt)(Ordering[Int].reverse)
@@ -91,7 +95,7 @@ object ActivityMgr {
 
       val attmptEith = attmptOpt match {
         case Some(r) =>
-          if (!Status.isAlive(r.status) && r.attempt < ps.maxAttempt) {
+          if (!Status.isAlive(r.status) && shouldRetry(r.attempt, ps.maxAttempt, resourceStatus)) {
             Right(r.attempt + 1)
           } else if (Status.isAlive(r.status)) {
             Right(r.attempt) // resume an already live attempt
@@ -203,7 +207,11 @@ object ActivityMgr {
         terminate(ps, sts)
       case AttemptFinished(sts @ Status.Failed) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received AttemptFinished($sts)")
-        if (attemptId < ps.maxAttempt) {
+        val resourceStatus = ps.database
+          .sync(new ResourceQuery(ps.workflowId, ps.resourceId).get())
+          .map(_.status)
+          .getOrElse(Status.Failed)
+        if (shouldRetry(attemptId, ps.maxAttempt, resourceStatus)) {
           val newAttmptId = attemptId + 1
           val newAttempt = ps.ctx.spawn(
             ActivityAttempt(
@@ -234,5 +242,11 @@ object ActivityMgr {
       ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
       Behaviors.same
     }
+
+  private[actor] def shouldRetry(
+    attemptId: Int,
+    maxAttempt: Int,
+    resourceStatus: Status.Value
+  ): Boolean = attemptId < maxAttempt && Status.isAlive(resourceStatus)
 
 }

@@ -24,6 +24,10 @@ object ResourceMgr {
   sealed trait Msg
 
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
+  case class InvalidateResourceInst(
+    instanceId: Int,
+    replyTo: ActorRef[ResourceInstSpecRsp]
+  ) extends Msg
   case class CreateResourceInst(replyTo: ActorRef[ResourceInstSpecRsp], instId: Int) extends Msg
   case class ResourceInstSpecRsp(spec: Either[Status.Value, (Int, JsValue)])
   case class ResourceInstanceFinished(status: Status.Value) extends Msg
@@ -151,6 +155,13 @@ object ResourceMgr {
             running(ps, resourceAttemptDelay, rscInst, instId)
         }
 
+      case InvalidateResourceInst(instanceId, replyTo) =>
+        ps.ctx.log.error(
+          s"${ps.ctx.self} (idle) received UNEXPECTED InvalidateResourceInst($instanceId, $replyTo)"
+        )
+        replyTo ! ResourceInstSpecRsp(Left(Status.Failed))
+        Behaviors.same
+
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.error(
           s"${ps.ctx.self} (idle) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
@@ -188,6 +199,21 @@ object ResourceMgr {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
+        Behaviors.same
+      case InvalidateResourceInst(instId, replyTo) =>
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (running) received InvalidateResourceInst($instId, $replyTo)"
+        )
+        if (instId < currentInstId) {
+          ps.ctx.self ! GetResourceInstSpec(replyTo)
+        } else if (instId == currentInstId) {
+          resourceInst ! ResourceInstance.Invalidate(replyTo)
+        } else {
+          ps.ctx.log.error(
+            s"${ps.ctx.self} cannot invalidate future resource instance $instId; current is $currentInstId"
+          )
+          replyTo ! ResourceInstSpecRsp(Left(Status.Failed))
+        }
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.error(
@@ -241,6 +267,12 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received GetResourceInstSpec($replyTo)")
         ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
         Behaviors.same
+      case InvalidateResourceInst(instId, replyTo) =>
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (waiting) received InvalidateResourceInst($instId, $replyTo)"
+        )
+        ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
+        Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CreateResourceInst($replyTo, $instId)")
         spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
@@ -284,6 +316,12 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (finished) received GetResourceInstSpec($replyTo)")
         replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
+      case InvalidateResourceInst(instId, replyTo) =>
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (finished) received InvalidateResourceInst($instId, $replyTo)"
+        )
+        replyTo ! ResourceInstSpecRsp(Left(status))
+        Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.error(
           s"${ps.ctx.self} (finished) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
@@ -317,6 +355,12 @@ object ResourceMgr {
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received GetResourceInstSpec(${replyTo})")
+        replyTo ! ResourceInstSpecRsp(Left(status))
+        Behaviors.same
+      case InvalidateResourceInst(instId, replyTo) =>
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (terminating) received InvalidateResourceInst($instId, $replyTo)"
+        )
         replyTo ! ResourceInstSpecRsp(Left(status))
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>

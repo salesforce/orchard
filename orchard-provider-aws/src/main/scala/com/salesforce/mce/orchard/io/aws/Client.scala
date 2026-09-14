@@ -11,6 +11,7 @@ import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCrede
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.ec2.Ec2Client
 import software.amazon.awssdk.services.emr.EmrClient
+import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.sns.SnsClient
 import software.amazon.awssdk.services.ssm.SsmClient
 import software.amazon.awssdk.services.sts.StsClient
@@ -78,6 +79,21 @@ object Client {
       .foldLeft(EmrClient.builder())(_.region(_))
 
     assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
+      case Some(stsAssumeRoleCredentials) =>
+        clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
+      case None =>
+        staticCredentialsOpt
+          .map(clientBuilder.credentialsProvider(_).build())
+          .getOrElse(clientBuilder.build())
+    }
+  }
+
+  def s3(): S3Client = {
+
+    val clientBuilder = clientRegionOpt
+      .foldLeft(S3Client.builder())(_.region(_))
+
+    assumeRoleCredentialsOpt(S3Client.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
         clientBuilder.credentialsProvider(stsAssumeRoleCredentials).build()
       case None =>

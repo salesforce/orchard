@@ -36,6 +36,7 @@ object ActivityAttempt {
     activityName: String,
     attemptId: Int,
     resourceId: String,
+    resourceMgr: ActorRef[ResourceMgr.Msg],
     rscInstSpecAdapter: ActorRef[ResourceMgr.ResourceInstSpecRsp],
     timers: TimerScheduler[Msg]
   )
@@ -75,6 +76,7 @@ object ActivityAttempt {
           activityName,
           attemptId,
           resourceId,
+          resourceMgr,
           rscInstSpecAdapter,
           timers
         )
@@ -231,16 +233,26 @@ object ActivityAttempt {
           terminate(ps, Status.Failed)
         case CheckProgress =>
           ps.ctx.log.info(s"${ps.ctx.self} (running) received CheckProgress")
-          activityIO.getProgress(attemptSpec) match {
+          activityIO.getProgressWithDetails(attemptSpec) match {
             case Left(exp) =>
               val errorMessage = s"Failed getting attempt progress $exp"
               ps.ctx.log.error(errorMessage)
               ps.database.sync(ps.query.setTerminated(Status.Failed, errorMessage))
               terminate(ps, Status.Failed)
-            case Right(status) if Status.TerminatedStatuses.contains(status) =>
-              ps.database.sync(ps.query.setTerminated(status, ""))
-              terminate(ps, status)
-            case Right(status) =>
+            case Right(progress)
+                if progress.status == Status.Failed && progress.resourceFailure =>
+              ps.ctx.log.warn(
+                s"${ps.ctx.self} detected failed resource instance $resourceInstance: ${progress.detail}"
+              )
+              ps.resourceMgr ! ResourceMgr.InvalidateResourceInst(
+                resourceInstance,
+                ps.rscInstSpecAdapter
+              )
+              invalidating(ps, resourceInstance, progress.detail)
+            case Right(progress) if Status.TerminatedStatuses.contains(progress.status) =>
+              ps.database.sync(ps.query.setTerminated(progress.status, progress.detail))
+              terminate(ps, progress.status)
+            case Right(_) =>
               ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
               Behaviors.same
           }
@@ -249,6 +261,40 @@ object ActivityAttempt {
         ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
         Behaviors.same
       }
+  }
+
+  private def invalidating(
+    ps: Params,
+    invalidResourceInstance: Int,
+    detail: String
+  ): Behavior[Msg] = Behaviors.receiveMessage {
+    case Cancel =>
+      ps.ctx.log.info(s"${ps.ctx.self} (invalidating) received Cancel")
+      ps.database.sync(ps.query.setTerminated(Status.Canceled, ""))
+      terminate(ps, Status.Canceled)
+    case ResourceInstSpec(Right((replacementInstance, _)))
+        if replacementInstance > invalidResourceInstance =>
+      ps.ctx.log.info(
+        s"${ps.ctx.self} replaced failed resource instance $invalidResourceInstance with $replacementInstance"
+      )
+      ps.database.sync(ps.query.setTerminated(Status.Failed, detail))
+      terminate(ps, Status.Failed)
+    case ResourceInstSpec(Right((instanceId, _))) =>
+      ps.ctx.log.warn(
+        s"${ps.ctx.self} is still waiting to replace resource instance $invalidResourceInstance; received $instanceId"
+      )
+      ps.resourceMgr ! ResourceMgr.InvalidateResourceInst(
+        invalidResourceInstance,
+        ps.rscInstSpecAdapter
+      )
+      Behaviors.same
+    case ResourceInstSpec(Left(status)) =>
+      val errorMessage = s"Unable to replace failed resource instance $invalidResourceInstance: $status"
+      ps.ctx.log.error(s"${ps.ctx.self} $errorMessage")
+      ps.database.sync(ps.query.setTerminated(Status.Failed, errorMessage))
+      terminate(ps, Status.Failed)
+    case CheckProgress =>
+      Behaviors.same
   }
 
   def terminate(ps: Params, status: Status.Value): Behavior[Msg] = {

@@ -10,6 +10,7 @@ val prometheusVersion = "0.16.0"
 
 val awsEc2            = "software.amazon.awssdk"   % "ec2"                        % awsVersion
 val awsEmr            = "software.amazon.awssdk"   % "emr"                        % awsVersion
+val awsS3             = "software.amazon.awssdk"   % "s3"                         % awsVersion
 val awsSsm            = "software.amazon.awssdk"   % "ssm"                        % awsVersion
 val awsSts            = "software.amazon.awssdk"   % "sts"                        % awsVersion
 val awsSns            = "software.amazon.awssdk"   % "sns"                        % awsVersion
@@ -112,6 +113,7 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
     libraryDependencies ++= Seq(
       awsEc2,
       awsEmr,
+      awsS3,
       awsSsm,
       awsSts,
       awsSns
