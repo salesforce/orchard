@@ -24,9 +24,10 @@ class ActivityIOSpec extends AnyWordSpec {
           Right(Status.Canceled)
       }
 
-      assertResult(Right(ActivityIO.Progress(Status.Failed)))(
-        activity.getProgressWithDetails(Json.obj())
-      )
+      val progress = activity.getProgressWithDetails(Json.obj())
+
+      assertResult(Right(ActivityIO.Progress(Status.Failed)))(progress)
+      assert(progress.toOption.flatMap(_.updatedAttemptSpec).isEmpty)
     }
   }
 }

@@ -41,6 +41,10 @@ class ActivityAttemptQuery(workflowId: String, activityId: String, attempt: Int)
       )
     )
 
+  def setAttemptSpec(attemptSpec: JsValue): DBIO[Int] = self
+    .map(_.attemptSpec)
+    .update(Option(attemptSpec))
+
   def setTerminated(sts: Status.Value, errorMessage: String) = self
     .map(r => (r.status, r.errorMessage, r.terminatedAt))
     .update((sts, errorMessage, Option(LocalDateTime.now())))

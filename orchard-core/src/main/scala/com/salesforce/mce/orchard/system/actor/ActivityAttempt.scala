@@ -239,22 +239,34 @@ object ActivityAttempt {
               ps.ctx.log.error(errorMessage)
               ps.database.sync(ps.query.setTerminated(Status.Failed, errorMessage))
               terminate(ps, Status.Failed)
-            case Right(progress)
-                if progress.status == Status.Failed && progress.resourceFailure =>
-              ps.ctx.log.warn(
-                s"${ps.ctx.self} detected failed resource instance $resourceInstance: ${progress.detail}"
-              )
-              ps.resourceMgr ! ResourceMgr.InvalidateResourceInst(
-                resourceInstance,
-                ps.rscInstSpecAdapter
-              )
-              invalidating(ps, resourceInstance, progress.detail)
-            case Right(progress) if Status.TerminatedStatuses.contains(progress.status) =>
-              ps.database.sync(ps.query.setTerminated(progress.status, progress.detail))
-              terminate(ps, progress.status)
-            case Right(_) =>
-              ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
-              Behaviors.same
+            case Right(progress) =>
+              val nextAttemptSpec = progress.updatedAttemptSpec.getOrElse(attemptSpec)
+              progress.updatedAttemptSpec.foreach { updatedAttemptSpec =>
+                val updatedRows = ps.database.sync(ps.query.setAttemptSpec(updatedAttemptSpec))
+                require(updatedRows == 1, s"Unable to persist attempt spec for ${ps.ctx.self}")
+              }
+
+              if (progress.status == Status.Failed && progress.resourceFailure) {
+                ps.ctx.log.warn(
+                  s"${ps.ctx.self} detected failed resource instance $resourceInstance: ${progress.detail}"
+                )
+                ps.resourceMgr ! ResourceMgr.InvalidateResourceInst(
+                  resourceInstance,
+                  ps.rscInstSpecAdapter
+                )
+                invalidating(ps, resourceInstance, progress.detail)
+              } else if (Status.TerminatedStatuses.contains(progress.status)) {
+                ps.database.sync(ps.query.setTerminated(progress.status, progress.detail))
+                terminate(ps, progress.status)
+              } else {
+                running(
+                  ps,
+                  resourceInstance,
+                  activityIO,
+                  nextAttemptSpec,
+                  checkProgressDelay
+                )
+              }
           }
       }
       .receiveSignal { case (actorContext, signal) =>
