@@ -28,6 +28,7 @@ object ResourceInstance {
 
   sealed trait Msg
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceMgr.ResourceInstSpecRsp]) extends Msg
+  case class Invalidate(replyTo: ActorRef[ResourceMgr.ResourceInstSpecRsp]) extends Msg
   case class Shutdown(status: Status.Value) extends Msg
 
   case class Params(
@@ -105,6 +106,10 @@ object ResourceInstance {
             ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
             terminate(ps, Status.Failed, Option(replyTo))
         }
+      case Invalidate(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (pending) received Invalidate($replyTo)")
+        ps.database.sync(ps.query.setTerminated(Status.Failed, "Resource invalidated"))
+        terminate(ps, Status.Failed, Option(replyTo))
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (pending) received Shutdown($status)")
         ps.database.sync(ps.query.setTerminated(status, ""))
@@ -139,6 +144,9 @@ object ResourceInstance {
             ps.ctx.log.info(s"${ps.ctx.self} (activating) received resource exception, shutting down")
             shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
         }
+      case Invalidate(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (activating) received Invalidate($replyTo)")
+        shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (activating) received Shutdown($status)")
         shuttingDown(ps, instSpec, if (status == Status.Timeout) status else Status.Failed, None)
@@ -166,6 +174,9 @@ object ResourceInstance {
             ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
             terminate(ps, Status.Failed, Option(replyTo))
         }
+      case Invalidate(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received Invalidate($replyTo)")
+        shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
         shuttingDown(ps, instSpec, status, None)
@@ -205,6 +216,10 @@ object ResourceInstance {
   private def inactive(ps: Params, status: Status.Value): Behavior[Msg] = Behaviors.receiveMessage {
     case GetResourceInstSpec(replyTo) =>
       ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
+      ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, replyTo)
+      Behaviors.same
+    case Invalidate(replyTo) =>
+      ps.ctx.log.info(s"${ps.ctx.self} (inactive) received Invalidate($replyTo)")
       ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, replyTo)
       Behaviors.same
     case Shutdown(sts) =>

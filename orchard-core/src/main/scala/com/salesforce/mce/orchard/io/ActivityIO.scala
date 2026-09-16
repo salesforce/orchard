@@ -17,11 +17,27 @@ trait ActivityIO {
 
   def getProgress(spec: JsValue): Either[Throwable, Status.Value]
 
+  /**
+    * Returns activity progress together with whether a terminal failure makes the backing
+    * resource unsafe to reuse. Providers that cannot make that distinction retain the existing
+    * behavior and treat failures as activity-local. A provider can also return an updated opaque
+    * attempt spec, which Orchard persists before the next progress check.
+    */
+  def getProgressWithDetails(spec: JsValue): Either[Throwable, ActivityIO.Progress] =
+    getProgress(spec).map(ActivityIO.Progress(_))
+
   def terminate(spec: JsValue): Either[Throwable, Status.Value]
 
 }
 
 object ActivityIO {
+
+  case class Progress(
+    status: Status.Value,
+    resourceFailure: Boolean = false,
+    detail: String = "",
+    updatedAttemptSpec: Option[JsValue] = None
+  )
 
   case class Conf(
     workflowId: String,
