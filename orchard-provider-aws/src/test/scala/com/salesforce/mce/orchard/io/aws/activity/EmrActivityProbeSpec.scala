@@ -13,14 +13,66 @@ import scala.jdk.CollectionConverters._
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import play.api.libs.json.{JsSuccess, Json}
+import play.api.libs.json.{JsError, JsSuccess, Json}
 import software.amazon.awssdk.services.emr.model.{ActionOnFailure, StepState, StepStatus, StepTimeline}
 
+import com.salesforce.mce.orchard.io.ActivityIO
 import com.salesforce.mce.orchard.model.Status
 
 class EmrActivityProbeSpec extends AnyWordSpec with Matchers {
 
   import EmrActivity._
+
+  private def activityConf(activitySpec: play.api.libs.json.JsValue): ActivityIO.Conf =
+    ActivityIO.Conf(
+      workflowId = "workflow",
+      activityId = "activity",
+      activityName = "activity-name",
+      attemptId = 1,
+      activityType = "aws.activity.EmrActivity",
+      activitySpec = activitySpec,
+      resourceInstSpec = Json.obj("clusterId" -> "j-cluster")
+    )
+
+  private val stepsJson = Json.arr(
+    Json.obj("jar" -> "command-runner.jar", "args" -> Json.arr("echo", "hello"))
+  )
+
+  "EMR failure health policy" should {
+    "default an absent policy to disabled" in {
+      val decoded = EmrActivity.decode(activityConf(Json.obj("steps" -> stepsJson)))
+
+      decoded.map(_.failureHealthPolicy) shouldBe JsSuccess(FailureHealthPolicy.Disabled)
+      encodeAttemptSpec(Seq("s-one"), FailureHealthPolicy.Disabled) shouldBe Json.arr("s-one")
+    }
+
+    "decode an explicit None policy as disabled" in {
+      val decoded = EmrActivity.decode(
+        activityConf(Json.obj("steps" -> stepsJson, "failureHealthPolicy" -> "None"))
+      )
+
+      decoded.map(_.failureHealthPolicy) shouldBe JsSuccess(FailureHealthPolicy.Disabled)
+    }
+
+    "enable versioned probe state only for HdfsReadWrite" in {
+      val decoded = EmrActivity.decode(
+        activityConf(Json.obj("steps" -> stepsJson, "failureHealthPolicy" -> "HdfsReadWrite"))
+      )
+
+      decoded.map(_.failureHealthPolicy) shouldBe JsSuccess(FailureHealthPolicy.HdfsReadWrite)
+      encodeAttemptSpec(Seq("s-one"), FailureHealthPolicy.HdfsReadWrite) shouldBe
+        Json.toJson(AttemptSpec(stepIds = Seq("s-one")))
+    }
+
+    "reject an unknown policy" in {
+      val decoded = EmrActivity.decode(
+        activityConf(Json.obj("steps" -> stepsJson, "failureHealthPolicy" -> "Unknown"))
+      )
+
+      decoded shouldBe a[JsError]
+      decoded.toString should include("Invalid failureHealthPolicy 'Unknown'")
+    }
+  }
 
   "EMR attempt spec" should {
     "decode the legacy step ID array" in {

@@ -24,8 +24,12 @@ import com.salesforce.mce.orchard.model.Status
 import com.salesforce.mce.orchard.system.util.InvalidJsonException
 import com.salesforce.mce.orchard.util.RetryHelper._
 
-case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: String)
-    extends ActivityIO {
+case class EmrActivity(
+  name: String,
+  steps: Seq[EmrActivity.Step],
+  clusterId: String,
+  failureHealthPolicy: EmrActivity.FailureHealthPolicy
+) extends ActivityIO {
 
   import EmrActivity._
 
@@ -57,7 +61,7 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
           .build()
       )
 
-    Json.toJson(AttemptSpec(stepIds = response.stepIds().asScala.toSeq))
+    encodeAttemptSpec(response.stepIds().asScala.toSeq, failureHealthPolicy)
   }
 
   override def getProgress(spec: JsValue): Either[Throwable, Status.Value] =
@@ -83,7 +87,7 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
     val client = Client.emr()
     describeSteps(client, spec.stepIds).flatMap { originalSteps =>
       val originalStatus = aggregateOriginalStatus(originalSteps.map(_._2.state()))
-      if (originalStatus != Status.Failed) {
+      if (originalStatus != Status.Failed || failureHealthPolicy != FailureHealthPolicy.HdfsReadWrite) {
         Right(ActivityIO.Progress(originalStatus))
       } else {
         val failedSourceStep = firstFailedStepId(originalSteps)
@@ -306,6 +310,21 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
 
 object EmrActivity {
 
+  sealed trait FailureHealthPolicy
+
+  private[activity] object FailureHealthPolicy {
+    case object Disabled extends FailureHealthPolicy
+    case object HdfsReadWrite extends FailureHealthPolicy
+
+    implicit val reads: Reads[FailureHealthPolicy] = Reads {
+      case JsString("None") => JsSuccess(Disabled)
+      case JsString("HdfsReadWrite") => JsSuccess(HdfsReadWrite)
+      case JsString(value) =>
+        JsError(s"Invalid failureHealthPolicy '$value'; expected 'None' or 'HdfsReadWrite'")
+      case _ => JsError("failureHealthPolicy must be a string")
+    }
+  }
+
   private[activity] val ProbePending = "pending"
   private[activity] val ProbeSubmitted = "submitted"
   private[activity] val ProbePendingTimeout = Duration.ofMinutes(10)
@@ -360,6 +379,14 @@ object EmrActivity {
       _ => value.validate[Seq[String]].map(stepIds => AttemptSpec(stepIds = stepIds)),
       valid => JsSuccess(valid)
     )
+
+  private[activity] def encodeAttemptSpec(
+    stepIds: Seq[String],
+    failureHealthPolicy: FailureHealthPolicy
+  ): JsValue = failureHealthPolicy match {
+    case FailureHealthPolicy.Disabled => Json.toJson(stepIds)
+    case FailureHealthPolicy.HdfsReadWrite => Json.toJson(AttemptSpec(stepIds = stepIds))
+  }
 
   private[activity] def aggregateOriginalStatus(states: Seq[StepState]): Status.Value = {
     if (states.forall(_ == StepState.COMPLETED)) Status.Finished
@@ -448,9 +475,12 @@ object EmrActivity {
       steps <- (conf.activitySpec \ "steps")
         .validate[Seq[EmrActivity.Step]]
         .map(_.map(applyContext(_, conf)))
+      failureHealthPolicy <- (conf.activitySpec \ "failureHealthPolicy")
+        .validateOpt[FailureHealthPolicy]
+        .map(_.getOrElse(FailureHealthPolicy.Disabled))
       clusterId <- (conf.resourceInstSpec \ "clusterId").validate[String]
     } yield {
-      EmrActivity(conf.activityName, steps, clusterId)
+      EmrActivity(conf.activityName, steps, clusterId, failureHealthPolicy)
     }
   }
 }
