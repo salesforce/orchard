@@ -101,6 +101,7 @@ case class EmrResource(
                                 .instanceType(i.instanceType)
                               i.bidPrice.foldLeft(itcBuilder)(_.bidPrice(_))
                               i.weightedCapacity.foldLeft(itcBuilder)(_.weightedCapacity(_))
+                              i.priority.foldLeft(itcBuilder)(_.priority(_))
                               itcBuilder.build()
                             }: _*)
                           if (lastAttempt && useOnDemandOnLastAttempt || c.targetSpotCapacity.isEmpty) {
@@ -258,7 +259,8 @@ object EmrResource {
   case class InstanceTypeConfig(
     instanceType: String,
     bidPrice: Option[String],
-    weightedCapacity: Option[Int]
+    weightedCapacity: Option[Int],
+    priority: Option[Double]
   )
   implicit val instanceTypeConfigReads: Reads[InstanceTypeConfig] =
     Json.reads[InstanceTypeConfig]

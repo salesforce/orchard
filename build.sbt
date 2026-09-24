@@ -2,9 +2,9 @@ val slickVersion = "3.5.2"
 // make sure this is the same as the playWS's dependency
 val pekkoVersion = "1.0.3"
 val playJsonVersion = "3.0.6"
-val jacksonVersion = "2.18.6"
-val nettyVersion = "4.1.132.Final"
-val awsVersion = "2.41.+"
+val jacksonVersion = "2.21.6"
+val jacksonAnnotationsVersion = "2.21"
+val awsVersion = "2.54.5"
 val stubbornVersion = "3.1.0"
 val prometheusVersion = "0.16.0"
 
@@ -15,14 +15,14 @@ val awsSts            = "software.amazon.awssdk"   % "sts"                      
 val awsSns            = "software.amazon.awssdk"   % "sns"                        % awsVersion
 val slick             = "com.typesafe.slick"      %% "slick"                      % slickVersion
 val slickHikaricp     = "com.typesafe.slick"      %% "slick-hikaricp"             % slickVersion
-val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.7"
+val postgresql        = "org.postgresql"           % "postgresql"                 % "42.7.13"
 val playJson          = "org.playframework"       %% "play-json"                  % playJsonVersion
 val pekkoActor        = "org.apache.pekko"        %% "pekko-actor-typed"          % pekkoVersion
 val pekkoTestkit      = "org.apache.pekko"        %% "pekko-actor-testkit-typed"  % pekkoVersion % Test
 
 val scalaTestArtifact = "org.scalatest"             %% "scalatest"                % "3.2.19" % Test
 val scalaPlusPlay     = "org.scalatestplus.play"    %% "scalatestplus-play"       % "7.0.1" % Test
-val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.32"
+val logback           = "ch.qos.logback"             % "logback-classic"          % "1.5.35"
 val stubbornArtifact  = "com.krux"                  %% "stubborn"                 % stubbornVersion
 val prometheusClient  = "io.prometheus"              % "simpleclient"             % prometheusVersion
 val prometheusCommon  = "io.prometheus"              % "simpleclient_common"      % prometheusVersion
@@ -71,11 +71,9 @@ lazy val orchardCore = (project in file("orchard-core")).
       // Force Jackson version for consistency across all modules
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
-      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion
     )
   )
 
@@ -102,9 +100,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.module" % "jackson-module-parameter-names" % jacksonVersion
     )
   ).
   dependsOn(orchardCore, orchardProviderAWS)
@@ -124,11 +120,9 @@ lazy val orchardProviderAWS = (project in file("orchard-provider-aws")).
       // Force Jackson version to match security requirements
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonAnnotationsVersion,
       "com.fasterxml.jackson.datatype" % "jackson-datatype-jdk8" % jacksonVersion,
-      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion,
-      "io.netty" % "netty-codec-http" % nettyVersion,
-      "io.netty" % "netty-codec-http2" % nettyVersion
+      "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310" % jacksonVersion
     )
   ).
   dependsOn(orchardCore)
