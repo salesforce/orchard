@@ -41,4 +41,43 @@ class ResourceMgrDeathWatchSpec extends AnyWordSpec with Matchers {
       ResourceMgr.deathActionFor(Some(Status.Timeout)) shouldBe ResourceMgr.DeathAction.Ignore
     }
   }
+
+  // The epoch guard disambiguates reused instIds: a crash-respawn reuses the same instId, so a stale
+  // Progressed from a crashed predecessor shares the live successor's instId; only the epoch tells them
+  // apart. These pin the "both must match" contract so a regression that drops the epoch clause fails.
+  "ResourceMgr.isCurrentIncarnation" should {
+
+    "accept a Progressed whose instId AND epoch both match the current incarnation" in {
+      ResourceMgr.isCurrentIncarnation(msgInstId = 2, msgEpoch = 3, currentInstId = 2, currentEpoch = 3) shouldBe true
+    }
+
+    // Same reused instId, but the stale predecessor carries an older epoch.
+    "reject a stale Progressed with the same instId but an older epoch" in {
+      ResourceMgr.isCurrentIncarnation(msgInstId = 2, msgEpoch = 2, currentInstId = 2, currentEpoch = 3) shouldBe false
+    }
+
+    "reject a Progressed from a superseded attempt (different instId), even if the epoch coincides" in {
+      ResourceMgr.isCurrentIncarnation(msgInstId = 1, msgEpoch = 3, currentInstId = 2, currentEpoch = 3) shouldBe false
+    }
+
+    "reject when neither instId nor epoch match" in {
+      ResourceMgr.isCurrentIncarnation(msgInstId = 1, msgEpoch = 1, currentInstId = 2, currentEpoch = 3) shouldBe false
+    }
+  }
+
+  // The consecutive-crash budget bounds a crash loop. These pin the >= boundary (an off-by-one here would
+  // either fail a resource one crash too early or let a loop run one crash too long) relative to the
+  // configured MaxRespawnAttempts, so the test tracks the constant rather than hard-coding 3.
+  "ResourceMgr.respawnBudgetExhausted" should {
+
+    "keep respawning while consecutive crashes are below MaxRespawnAttempts" in {
+      ResourceMgr.respawnBudgetExhausted(0) shouldBe false
+      ResourceMgr.respawnBudgetExhausted(ResourceMgr.MaxRespawnAttempts - 1) shouldBe false
+    }
+
+    "give up once consecutive crashes reach MaxRespawnAttempts" in {
+      ResourceMgr.respawnBudgetExhausted(ResourceMgr.MaxRespawnAttempts) shouldBe true
+      ResourceMgr.respawnBudgetExhausted(ResourceMgr.MaxRespawnAttempts + 1) shouldBe true
+    }
+  }
 }

@@ -147,7 +147,11 @@ object ActivityAttempt {
     activityType: String,
     activitySpec: JsValue,
     checkProgressDelay: Policy
-  ): Behavior[Msg] =
+  ): Behavior[Msg] = {
+    // Keep a CheckProgress watchdog armed for the whole waiting state: the GetResourceInstSpec reply can
+    // be lost (e.g. the ResourceInstance dies mid-poll), and without a standing timer we would wait forever.
+    // Shared CheckProgress key => running() re-arms it on transition, so it never double-fires.
+    ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
     Behaviors
       .receiveMessage[Msg] {
         case Cancel =>
@@ -200,6 +204,8 @@ object ActivityAttempt {
           }
         case CheckProgress =>
           ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CheckProgress")
+          // Re-arm before re-polling so the watchdog survives a lost reply and keeps retrying.
+          ps.timers.startSingleTimer(CheckProgress, checkProgressDelay.delay())
           resourceMgr ! ResourceMgr.GetResourceInstSpec(ps.rscInstSpecAdapter)
           Behaviors.same
       }
@@ -207,6 +213,7 @@ object ActivityAttempt {
         ps.ctx.log.info(s"${actorContext.self} (waiting) received signal $signal")
         Behaviors.same
       }
+  }
 
   def running(
     ps: Params,
@@ -224,11 +231,13 @@ object ActivityAttempt {
           ps.database.sync(ps.query.setTerminated(sts, ""))
           terminate(ps, sts)
         case ResourceInstSpec(spec) =>
-          ps.ctx.log.error(
-            s"${ps.ctx.self} (running) received unexpected ResourceInstSpec($spec) during running state"
+          // A late/duplicate spec reply can land here after we already transitioned to running (the
+          // watchdog re-polls and the ResourceInstance answers every poll). Stale, not an error -- ignore
+          // it rather than fail the already-started activity.
+          ps.ctx.log.info(
+            s"${ps.ctx.self} (running) ignoring stale ResourceInstSpec($spec) after activity already started"
           )
-          ps.database.sync(ps.query.setTerminated(Status.Failed, "Internal Error"))
-          terminate(ps, Status.Failed)
+          Behaviors.same
         case CheckProgress =>
           ps.ctx.log.info(s"${ps.ctx.self} (running) received CheckProgress")
           activityIO.getProgress(attemptSpec) match {

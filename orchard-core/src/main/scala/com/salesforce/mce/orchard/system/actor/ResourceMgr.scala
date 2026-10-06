@@ -8,6 +8,7 @@
 package com.salesforce.mce.orchard.system.actor
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 import org.apache.pekko.actor.typed._
 import org.apache.pekko.actor.typed.scaladsl._
@@ -38,6 +39,22 @@ object ResourceMgr {
   // stops itself on its happy path (it parks in `inactive` even after terminate), this only fires on
   // an uncaught crash, so it is an unambiguous "instance lost" indicator.
   case class ResourceInstanceDied(instId: Int) extends Msg
+  // The current ResourceInstance confirmed its cluster is Running. This is the only genuine liveness signal
+  // the manager receives (the child's spec reply goes straight to the activity attempt, not here), so it
+  // alone resets the consecutive-crash respawn budget. `epoch` identifies the incarnation that emitted it:
+  // a crash-respawn reuses the same instId, so only matching the current epoch distinguishes a genuine
+  // signal from a stale one queued by a crashed predecessor (which would otherwise wrongly reset the budget).
+  case class ResourceInstanceProgressed(instId: Int, epoch: Int) extends Msg
+  // The child ran shuttingDown but resourceIO.terminate returned Left (a *clean* failure, not a crash):
+  // the instance DB row is terminal yet the provider cluster may still be alive. The child hands the
+  // teardown back so the manager can drive a direct terminate backstop instead of the leak silently
+  // masquerading as a clean finish. replyTo carries the waiting activity attempt (if any) so it is still
+  // answered.
+  case class ResourceInstanceTerminateFailed(
+    instId: Int,
+    status: Status.Value,
+    replyTo: Option[ActorRef[ResourceInstSpecRsp]]
+  ) extends Msg
 
   case class Params(
     ctx: ActorContext[ResourceMgr.Msg],
@@ -66,7 +83,7 @@ object ResourceMgr {
     // exists yet (None → create() never ran, so a fresh start is duplicate-safe). No create() re-entry.
     case object Respawn extends DeathAction
     // Crashed inside the pending/create window (row persisted as Pending, spec not) → respawning risks
-    // a duplicate cluster because create() is non-idempotent, so fail the resource instead (§7a).
+    // a duplicate cluster because create() is non-idempotent, so fail the resource instead.
     case object Fail extends DeathAction
     // Already terminal → nothing to recreate.
     case object Ignore extends DeathAction
@@ -80,6 +97,23 @@ object ResourceMgr {
     case Some(Status.Pending) => DeathAction.Fail
     case _ => DeathAction.Ignore
   }
+
+  // A ResourceInstanceProgressed is genuine only when BOTH its instId and its epoch match the current
+  // incarnation. instId alone is insufficient: a crash-respawn reuses the same instId, so the epoch (bumped
+  // on every respawn) is what distinguishes the live successor from a stale predecessor.
+  private[actor] def isCurrentIncarnation(
+    msgInstId: Int,
+    msgEpoch: Int,
+    currentInstId: Int,
+    currentEpoch: Int
+  ): Boolean =
+    msgInstId == currentInstId && msgEpoch == currentEpoch
+
+  // Whether a crash-respawn should give up rather than respawn again. The budget counts consecutive crashes
+  // with no confirmed liveness in between (a progress signal resets it to 0); once MaxRespawnAttempts
+  // accumulate we fail the resource instead of spinning forever.
+  private[actor] def respawnBudgetExhausted(respawnAttempts: Int): Boolean =
+    respawnAttempts >= MaxRespawnAttempts
 
   def apply(
     orchardSettings: OrchardSettings,
@@ -148,9 +182,10 @@ object ResourceMgr {
               ctx,
               database,
               ps,
-              instId
+              instId,
+              epoch = 0
             )
-          } yield running(ps, orchardSettings.resourceReattemptDelayPolicy.delay(), rscInst, instId)
+          } yield running(ps, orchardSettings.resourceReattemptDelayPolicy.delay(), rscInst, instId, 0)
 
           result.left.map { sts =>
             database.sync(resourceQuery.setTerminated(sts))
@@ -172,14 +207,14 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received GetResourceInstSpec($replyTo)")
         ps.database.sync(ps.resourceQuery.setRun())
         val instId = 1
-        spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
+        spawnResourceInstance(ps.ctx, ps.database, ps, instId, epoch = 0) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
             replyTo ! ResourceInstSpecRsp(Left(sts))
             finished(ps, sts)
           case Right(rscInst) =>
             rscInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-            running(ps, resourceAttemptDelay, rscInst, instId)
+            running(ps, resourceAttemptDelay, rscInst, instId, 0)
         }
 
       case CreateResourceInst(replyTo, instId) =>
@@ -203,6 +238,16 @@ object ResourceMgr {
         ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
         Behaviors.unhandled
 
+      // no instance has been spawned yet, so no instance could have attempted a terminate
+      case msg: ResourceInstanceTerminateFailed =>
+        ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
+        Behaviors.unhandled
+
+      // no instance has been spawned yet, so none could have reported progress
+      case msg: ResourceInstanceProgressed =>
+        ps.ctx.log.error(s"${ps.ctx.self} (idle) received UNEXPECTED $msg")
+        Behaviors.unhandled
+
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (idle) received Shutdown($status)")
         ps.database.sync(ps.resourceQuery.setTerminated(status))
@@ -219,16 +264,29 @@ object ResourceMgr {
     resourceAttemptDelay: FiniteDuration,
     resourceInst: ActorRef[ResourceInstance.Msg],
     currentInstId: Int,
+    currentEpoch: Int,
     respawnAttempts: Int = 0
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received GetResourceInstSpec($replyTo)")
+        // Only forward the request; do NOT reset the respawn budget here. Forwarding is not evidence the
+        // child is healthy (it may crash handling this very poll); the budget resets only on a confirmed
+        // ResourceInstanceProgressed liveness signal below.
         resourceInst ! ResourceInstance.GetResourceInstSpec(replyTo)
-        // A responsive instance clears the consecutive-crash budget: only back-to-back deaths with no
-        // successful spec query in between count towards MaxRespawnAttempts.
+        Behaviors.same
+      case ResourceInstanceProgressed(instId, epoch)
+          if isCurrentIncarnation(instId, epoch, currentInstId, currentEpoch) =>
+        // The current incarnation confirmed its cluster is Running. Clear the consecutive-crash budget so
+        // only back-to-back crashes with no confirmed progress in between count towards MaxRespawnAttempts.
         if (respawnAttempts == 0) Behaviors.same
-        else running(ps, resourceAttemptDelay, resourceInst, currentInstId, 0)
+        else running(ps, resourceAttemptDelay, resourceInst, currentInstId, currentEpoch, 0)
+      case ResourceInstanceProgressed(instId, epoch) =>
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (running) ignoring stale ResourceInstanceProgressed(inst-$instId, epoch-$epoch); " +
+            s"current=inst-$currentInstId epoch-$currentEpoch"
+        )
+        Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.error(
           s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
@@ -244,6 +302,30 @@ object ResourceMgr {
           s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished($status, None)"
         )
         Behaviors.unhandled
+      case ResourceInstanceTerminateFailed(instId, sts, replyToOpt) if instId != currentInstId =>
+        // A superseded instance (an earlier attempt still parked in `inactive`, therefore still watched)
+        // reports its own terminate() returned Left. Backstop THAT old cluster only -- do NOT finish the
+        // resource, which would abandon the still-live current instance's cluster. Redirect its waiting
+        // attempt (if any) to the current instance.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (running) stale inst-$instId reported terminate failed (status=$sts); " +
+            s"backstop only, current=inst-$currentInstId still running"
+        )
+        terminateResourceBackstop(ps, instId)
+        replyToOpt.foreach(r => ps.ctx.self ! GetResourceInstSpec(r))
+        Behaviors.same
+      case ResourceInstanceTerminateFailed(instId, sts, replyToOpt) =>
+        // The current child's own resourceIO.terminate returned Left, so the cluster may still be alive
+        // even though its DB row is terminal. Drive the backstop, then answer the waiting attempt (if any)
+        // and settle into `finished` so WorkflowMgr is unblocked via the normal path.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (running) inst-$instId reported terminate failed (status=$sts); " +
+            s"driving backstop terminate"
+        )
+        terminateResourceBackstop(ps, instId)
+        ps.database.sync(ps.resourceQuery.setTerminated(sts))
+        replyToOpt.foreach(_ ! ResourceInstSpecRsp(Left(sts)))
+        finished(ps, sts)
       case InactiveResourceInstance(instId, status, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
@@ -271,39 +353,37 @@ object ResourceMgr {
           .sync(new ResourceInstanceQuery(ps.workflowId, ps.resourceId, instId).get())
           .map(_.status)
         deathActionFor(instStatus) match {
-          case DeathAction.Respawn if respawnAttempts >= MaxRespawnAttempts =>
+          case DeathAction.Respawn if respawnBudgetExhausted(respawnAttempts) =>
             ps.ctx.log.error(
               s"${ps.ctx.self} (running) inst-$instId crashed $respawnAttempts times without recovering; " +
                 s"giving up and failing resource"
             )
+            // The dead child never ran shuttingDown, so nobody has terminated the cluster. Drive the
+            // teardown directly before failing, otherwise the cluster runs unmanaged. Settle into
+            // `finished` so activity attempts still get Left(Failed) and WorkflowMgr is unblocked.
+            terminateResourceBackstop(ps, instId)
             ps.database.sync(ps.resourceQuery.setTerminated(Status.Failed))
             finished(ps, Status.Failed)
           case DeathAction.Respawn =>
-            // Activating/Running → a fresh incarnation re-reads the persisted spec in
-            // ResourceInstance.apply, re-attaches to the SAME cluster, and re-arms the terminate-after
-            // timers (no create() re-entry). None → no row was persisted, so create() never ran and a
-            // fresh Pending start is duplicate-safe. Bounded by MaxRespawnAttempts (reset on liveness).
-            //
-            // FOLLOW-UP: the replacement actor is passive until the next GetResourceInstSpec (driven by
-            // an activity attempt) arrives — it does not resume status polling on its own, so a resource
-            // whose activities have all completed could sit re-adopted-but-idle until the deadline. The
-            // CheckTimeout backstop still bounds it, but making ResourceInstance self-poll on (re)start
-            // would close the gap.
-            spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
+            // Activating/Running → a fresh incarnation re-reads the persisted spec, re-attaches to the SAME
+            // cluster, and re-arms the terminate-after timers (no create() re-entry). None → no row was
+            // persisted, so create() never ran and a fresh Pending start is duplicate-safe. The replacement
+            // confirms liveness on restart (apply polls the cluster once and emits ResourceInstanceProgressed
+            // if still Running), so the budget resets even when no activity attempt polls it. Bump the epoch
+            // so any Progressed still queued from the crashed incarnation (same instId) is rejected as stale.
+            spawnResourceInstance(ps.ctx, ps.database, ps, instId, currentEpoch + 1) match {
               case Right(rscInst) =>
-                running(ps, resourceAttemptDelay, rscInst, instId, respawnAttempts + 1)
+                running(ps, resourceAttemptDelay, rscInst, instId, currentEpoch + 1, respawnAttempts + 1)
               case Left(sts) =>
                 ps.database.sync(ps.resourceQuery.setTerminated(sts))
                 finished(ps, sts)
             }
           case DeathAction.Fail =>
-            // Pending = crashed inside the non-idempotent create() window. Because provider create()
-            // has no client token and the spec (cluster id) is persisted only AFTER the cluster exists,
-            // we cannot tell here whether a cluster was actually provisioned, so we fail rather than
-            // respawn (a respawn could provision a second one). Residual: a cluster created in that
-            // window but never recorded is orphaned. Recovering it durably needs create-intent to be
-            // persisted BEFORE the call plus reconcile-by-tag adoption on restart — out of scope for
-            // this in-process watch fix; tracked separately as the durable remedy.
+            // Pending = crashed inside the non-idempotent create() window. The spec (cluster id) is
+            // persisted only AFTER the cluster exists, so we cannot tell here whether a cluster was
+            // provisioned; fail rather than respawn (a respawn could provision a second one). Residual: a
+            // cluster created in that window but never recorded is orphaned -- recovering it durably needs
+            // create-intent persisted before the call plus reconcile-by-tag adoption, out of scope here.
             ps.ctx.log.error(
               s"${ps.ctx.self} (running) inst-$instId died before its spec was persisted; " +
                 s"failing resource rather than risk a duplicate cluster"
@@ -311,7 +391,17 @@ object ResourceMgr {
             ps.database.sync(ps.resourceQuery.setTerminated(Status.Failed))
             finished(ps, Status.Failed)
           case DeathAction.Ignore =>
-            Behaviors.same
+            // The crashed instance's row is already terminal (it ran its own shuttingDown before crashing),
+            // so there is nothing to recreate and no backstop needed. But we must not stay in `running`
+            // holding a ref to the dead child -- a later GetResourceInstSpec would forward into the void and
+            // the activity attempt would hang. Settle into `finished` so subsequent queries answer Left.
+            val terminalStatus = instStatus.getOrElse(Status.Failed)
+            ps.ctx.log.info(
+              s"${ps.ctx.self} (running) inst-$instId crashed but its row is already terminal " +
+                s"($terminalStatus); finishing resource rather than holding a dead child ref"
+            )
+            ps.database.sync(ps.resourceQuery.setTerminated(terminalStatus))
+            finished(ps, terminalStatus)
         }
       case ResourceInstanceDied(instId) =>
         ps.ctx.log.info(
@@ -321,7 +411,7 @@ object ResourceMgr {
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
         resourceInst ! ResourceInstance.Shutdown(status)
-        terminating(ps.ctx, ps, status)
+        terminating(ps.ctx, ps, status, currentInstId)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (running) received signal $signal")
@@ -339,14 +429,14 @@ object ResourceMgr {
         Behaviors.same
       case CreateResourceInst(replyTo, instId) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received CreateResourceInst($replyTo, $instId)")
-        spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
+        spawnResourceInstance(ps.ctx, ps.database, ps, instId, epoch = 0) match {
           case Left(sts) =>
             ps.database.sync(ps.resourceQuery.setTerminated(sts))
             replyTo ! ResourceInstSpecRsp(Left(sts))
             finished(ps, sts)
           case Right(rscInst) =>
             ps.ctx.self ! GetResourceInstSpec(replyTo)
-            running(ps, resourceAttemptDelay, rscInst, instId)
+            running(ps, resourceAttemptDelay, rscInst, instId, 0)
         }
       case ResourceInstanceFinished(status) =>
         ps.ctx.log.error(
@@ -363,9 +453,28 @@ object ResourceMgr {
         // A superseded instance died between attempts; the new attempt is already scheduled.
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) ignoring ResourceInstanceDied($instId)")
         Behaviors.same
+      case ResourceInstanceProgressed(instId, _) =>
+        // Progress from a superseded instance while we wait to spawn the next attempt; ignore.
+        ps.ctx.log.info(s"${ps.ctx.self} (waiting) ignoring ResourceInstanceProgressed($instId)")
+        Behaviors.same
+      case ResourceInstanceTerminateFailed(instId, sts, _) =>
+        // A superseded instance failed to tear down its own cluster while we wait to spawn the next
+        // attempt. Drive the backstop so that (old) cluster doesn't leak; the new attempt is unaffected.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (waiting) inst-$instId reported terminate failed (status=$sts); " +
+            s"driving backstop terminate"
+        )
+        terminateResourceBackstop(ps, instId)
+        Behaviors.same
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Shutdown($status)")
-        terminating(ps.ctx, ps, status)
+        // No instance is live in `waiting`: the previous one already terminated its own cluster before
+        // going inactive, and the next attempt hasn't spawned yet. There is nothing to tear down, so
+        // terminate directly rather than entering `terminating` with no current instance to wait on
+        // (which would hang -- the scheduled CreateResourceInst is a no-op during teardown, and no
+        // ResourceInstanceFinished/Died for a current instance would ever arrive).
+        ps.database.sync(ps.resourceQuery.setTerminated(status))
+        terminate(ps, status)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (waiting) received signal $signal")
@@ -404,6 +513,19 @@ object ResourceMgr {
         // Resource already finished; an inactive instance dying afterwards is inconsequential.
         ps.ctx.log.info(s"${ps.ctx.self} (finished) ignoring ResourceInstanceDied($instId)")
         Behaviors.same
+      case ResourceInstanceProgressed(instId, _) =>
+        // Resource already finished; a late progress signal is inconsequential.
+        ps.ctx.log.info(s"${ps.ctx.self} (finished) ignoring ResourceInstanceProgressed($instId)")
+        Behaviors.same
+      case ResourceInstanceTerminateFailed(instId, sts, _) =>
+        // A late terminate failure after the resource already settled; still drive the backstop so the
+        // cluster doesn't leak. terminate is idempotent, so this is safe even if it already went away.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (finished) inst-$instId reported terminate failed (status=$sts); " +
+            s"driving backstop terminate"
+        )
+        terminateResourceBackstop(ps, instId)
+        Behaviors.same
       case Shutdown(_) =>
         ps.ctx.log.info(s"${ps.ctx.self} (finished) received Shutdown(_)")
         terminate(ps, status)
@@ -417,6 +539,7 @@ object ResourceMgr {
     ctx: ActorContext[ResourceMgr.Msg],
     ps: Params,
     status: Status.Value,
+    currentInstId: Int,
     attempts: Int = 0
   ): Behavior[Msg] = Behaviors
     .receiveMessage[Msg] {
@@ -433,11 +556,42 @@ object ResourceMgr {
         ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
         ps.database.sync(ps.resourceQuery.setTerminated(status))
         terminate(ps, status)
+      case ResourceInstanceTerminateFailed(instId, _, _) if instId != currentInstId =>
+        // A superseded instance reports its own terminate() returned Left. Its cluster may still be alive,
+        // so backstop THAT cluster -- but this is not the current teardown completing, so stay in
+        // terminating rather than stopping the manager out from under the active shutdown.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (terminating) stale inst-$instId reported terminate failed; backstop only, " +
+            s"still terminating current=inst-$currentInstId"
+        )
+        terminateResourceBackstop(ps, instId)
+        Behaviors.same
+      case ResourceInstanceTerminateFailed(instId, _, _) =>
+        // The re-spawned child re-ran shuttingDown and terminate returned Left again. Drive the backstop
+        // directly, then notify WorkflowMgr so the workflow unblocks regardless.
+        ps.ctx.log.warn(
+          s"${ps.ctx.self} (terminating) inst-$instId reported terminate failed; driving backstop terminate"
+        )
+        terminateResourceBackstop(ps, instId)
+        ps.database.sync(ps.resourceQuery.setTerminated(status))
+        terminate(ps, status)
       case InactiveResourceInstance(instId, sts, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
         )
         ctx.self ! GetResourceInstSpec(replyTo)
+        Behaviors.same
+      case ResourceInstanceProgressed(instId, _) =>
+        // The instance polled Running before it processed our Shutdown; irrelevant during teardown.
+        ps.ctx.log.info(s"${ps.ctx.self} (terminating) ignoring ResourceInstanceProgressed($instId)")
+        Behaviors.same
+      case ResourceInstanceDied(instId) if instId != currentInstId =>
+        // A superseded instance crashed while we tear down the current one. It already terminated its own
+        // cluster before going inactive and its death says nothing about the active cluster. Treating it as
+        // the current death could stop the manager while the active cluster is still shutting down, so ignore.
+        ps.ctx.log.info(
+          s"${ps.ctx.self} (terminating) ignoring stale ResourceInstanceDied($instId); current=inst-$currentInstId"
+        )
         Behaviors.same
       case ResourceInstanceDied(instId) =>
         // ResourceInstance never stops on its happy path (it parks in `inactive` after terminate), so a
@@ -455,24 +609,30 @@ object ResourceMgr {
               s"${ps.ctx.self} (terminating) inst-$instId died before termination completed; " +
                 s"re-spawning to retry teardown (attempt ${attempts + 1})"
             )
-            spawnResourceInstance(ps.ctx, ps.database, ps, instId) match {
+            // epoch is only consulted by the running-state budget guard; teardown ignores Progressed, so
+            // any value is fine here.
+            spawnResourceInstance(ps.ctx, ps.database, ps, instId, epoch = 0) match {
               case Right(rscInst) =>
                 rscInst ! ResourceInstance.Shutdown(status)
-                terminating(ps.ctx, ps, status, attempts + 1)
+                terminating(ps.ctx, ps, status, currentInstId, attempts + 1)
               case Left(_) =>
-                // Can't even re-spawn (bad spec); stop hanging and unblock the workflow.
+                // Can't even re-spawn (bad spec); drive the backstop terminate directly, then stop
+                // hanging and unblock the workflow.
+                terminateResourceBackstop(ps, instId)
                 ps.database.sync(ps.resourceQuery.setTerminated(status))
                 terminate(ps, status)
             }
           case _ =>
             // Retries exhausted, the row already reached a terminal status (teardown effectively done),
-            // or it never got a spec (Pending/None → nothing safe to re-drive here). Record the status
-            // and notify WorkflowMgr so the workflow unblocks. A still-live cluster may leak — accepted,
-            // the same residual class as §7a; the durable reconcile remedy (a) is what closes it.
+            // or it never got a spec (Pending/None → nothing safe to re-drive here). Drive the backstop
+            // terminate (a no-op when no spec was persisted), record the status, and notify WorkflowMgr so
+            // the workflow unblocks. Any residual leak here is the create-window case closed only by the
+            // durable reconcile-by-tag remedy.
             ps.ctx.log.warn(
               s"${ps.ctx.self} (terminating) inst-$instId died during shutdown (status=$instStatus, " +
-                s"attempts=$attempts); notifying WorkflowMgr without a clean terminate"
+                s"attempts=$attempts); driving backstop terminate then notifying WorkflowMgr"
             )
+            terminateResourceBackstop(ps, instId)
             ps.database.sync(ps.resourceQuery.setTerminated(status))
             terminate(ps, status)
         }
@@ -493,13 +653,14 @@ object ResourceMgr {
     Behaviors.stopped
   }
 
-  def spawnResourceInstance(
-    ctx: ActorContext[ResourceMgr.Msg],
-    database: OrchardDatabase,
+  // Build the provider ResourceIO for an instance from the persisted resource spec. Shared by
+  // spawnResourceInstance (to run the instance actor) and terminateResourceBackstop (to tear the
+  // cluster down directly from the manager).
+  private[actor] def buildResourceIO(
     ps: Params,
     instId: Int
-  ): Either[Status.Value, ActorRef[ResourceInstance.Msg]] = {
-    val rscIOResult = ResourceIO(
+  ): play.api.libs.json.JsResult[ResourceIO] =
+    ResourceIO(
       ResourceIO.Conf(
         ps.workflowId,
         ps.resourceId,
@@ -511,7 +672,56 @@ object ResourceMgr {
       )
     )
 
-    rscIOResult match {
+  // Best-effort direct provider teardown driven by the manager. A cluster is normally terminated ONLY by
+  // a live ResourceInstance (shuttingDown -> resourceIO.terminate). On every path where no live instance
+  // will run that -- respawn budget exhausted, a re-spawn-to-retry that itself failed, or the child
+  // reporting its own terminate() returned Left -- the manager must drive the terminate itself or the
+  // cluster leaks. Reads the persisted instanceSpec (the cluster id) and calls terminate against it.
+  // Synchronous, matching the surrounding provider-call style (DeathWatch covers crashes, not hangs).
+  private[actor] def terminateResourceBackstop(ps: Params, instId: Int): Unit = {
+    val specOpt = ps.database
+      .sync(new ResourceInstanceQuery(ps.workflowId, ps.resourceId, instId).get())
+      .flatMap(_.instanceSpec)
+    specOpt match {
+      case None =>
+        // No persisted spec => create() never recorded a cluster, so there is nothing this manager can
+        // identify to terminate. (A cluster provisioned but never recorded can only be recovered by
+        // reconcile-by-tag adoption -- out of scope here.)
+        ps.ctx.log.info(
+          s"${ps.ctx.self} backstop terminate: inst-$instId has no persisted spec; nothing to terminate"
+        )
+      case Some(spec) =>
+        buildResourceIO(ps, instId) match {
+          case JsSuccess(resourceIO, _) =>
+            // A provider terminate() may break its Either contract and throw (e.g. exhausted retries).
+            // This runs inside a message handler, where an escaped throw would stop the manager mid-
+            // teardown. Fold a thrown exception and a returned Left into the same leak-logged outcome.
+            Try(resourceIO.terminate(spec)).toEither.flatten match {
+              case Right(_) =>
+                ps.ctx.log.info(s"${ps.ctx.self} backstop terminate of inst-$instId succeeded")
+              case Left(exp) =>
+                ps.ctx.log.error(
+                  s"${ps.ctx.self} backstop terminate of inst-$instId FAILED; cluster may leak",
+                  exp
+                )
+            }
+          case JsError(errors) =>
+            ps.ctx.log.error(
+              s"${ps.ctx.self} backstop terminate: cannot build ResourceIO for inst-$instId",
+              InvalidJsonException.raise(errors)
+            )
+        }
+    }
+  }
+
+  def spawnResourceInstance(
+    ctx: ActorContext[ResourceMgr.Msg],
+    database: OrchardDatabase,
+    ps: Params,
+    instId: Int,
+    epoch: Int
+  ): Either[Status.Value, ActorRef[ResourceInstance.Msg]] = {
+    buildResourceIO(ps, instId) match {
       case JsSuccess(resourceIO, _) =>
         val rscInst = ctx.spawn(
           ResourceInstance(
@@ -520,6 +730,7 @@ object ResourceMgr {
             ps.workflowId,
             ps.resourceId,
             instId,
+            epoch,
             resourceIO,
             ps.terminateAfter
           ),
