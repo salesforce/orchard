@@ -97,6 +97,7 @@ object ResourceInstance {
         ps.ctx.log.info(s"${ps.ctx.self} (pending) received GetResourceInstSpec($replyTo)")
         ps.resourceIO.create() match {
           case Right(instSpec) =>
+            ps.ctx.log.info(s"${ps.ctx.self} (pending) created resource instSpec=$instSpec")
             ps.database.sync(ps.query.setActivated(instSpec))
             ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), ResourceCheckDelay)
             activating(ps, instSpec)
