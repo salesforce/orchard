@@ -222,11 +222,10 @@ case class EmrResource(
       valid => getStatus(valid)
     )
 
-  private def terminate(spec: EmrResource.InstSpec) = {
+  private def terminate(spec: EmrResource.InstSpec): Either[Throwable, Status.Value] = retryToEither {
     Client
       .emr()
       .terminateJobFlows(TerminateJobFlowsRequest.builder().jobFlowIds(spec.clusterId).build())
-      .retry()
 
     Status.Finished
   }
@@ -235,7 +234,7 @@ case class EmrResource(
     .validate[EmrResource.InstSpec]
     .fold(
       invalid => Left(InvalidJsonException.raise(invalid)),
-      valid => Right(terminate(valid))
+      valid => terminate(valid)
     )
 
 }

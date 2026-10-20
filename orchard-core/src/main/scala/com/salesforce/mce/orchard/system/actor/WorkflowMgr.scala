@@ -21,6 +21,10 @@ object WorkflowMgr {
 
   case class ActivityCompleted(activityId: String, status: Status.Value) extends Msg
   case class ResourceTerminated(resourceId: String, status: Status.Value) extends Msg
+  // DeathWatch signal for a resource manager that stopped without first sending ResourceTerminated,
+  // i.e. an uncaught crash. The normal path sends ResourceTerminated before stopping, so a cooperative
+  // stop is disambiguated by resourceId still being present in resourceMgrs when this arrives.
+  case class ResourceMgrDied(resourceId: String) extends Msg
   case object ActionCompleted extends Msg
   case object CancelWorkflow extends Msg
 
@@ -60,10 +64,14 @@ object WorkflowMgr {
       val activityResources = activities.map(a => a.activityId -> a.resourceId).toMap
 
       val resourceMgrs = activityResources.values.toSet.map { rscId: String =>
-        rscId -> ctx.spawn(
+        val rscMgr = ctx.spawn(
           ResourceMgr(orchardSettings, database, ctx.self, workflowId, rscId),
           s"rsc-$rscId"
         )
+        // Watch the resource manager so an uncaught crash surfaces as ResourceMgrDied instead of
+        // silently leaving the workflow waiting on a ResourceTerminated that never arrives.
+        ctx.watchWith(rscMgr, ResourceMgrDied(rscId))
+        rscId -> rscMgr
       }.toMap
 
       val actionMgr = ctx.spawn(ActionMgr(database, ctx.self, workflowId), "acn-mgr")
@@ -146,6 +154,35 @@ object WorkflowMgr {
 
         if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
         else active(ctx, database, orchardSettings, newState)
+
+      case ResourceMgrDied(resourceId) =>
+        // The manager stops cooperatively on the normal path, but only AFTER sending ResourceTerminated,
+        // which is enqueued before the stop and so processed first -- removing resourceId from resourceMgrs.
+        // If the id is still present here, the manager crashed WITHOUT reporting termination: unblock the
+        // workflow rather than wait on a ResourceTerminated that will never come. The crashed manager owned
+        // the only path to provider teardown, so its cluster may leak (logged; recoverable only out-of-band).
+        if (ps.resourceMgrs.contains(resourceId)) {
+          ctx.log.error(
+            s"${ctx.self} (active) resource manager for $resourceId died without reporting termination; " +
+              s"canceling dependent activities and failing the resource (cluster may leak)"
+          )
+          val newResourceMgrs = ps.resourceMgrs - resourceId
+          for {
+            (actId, rscId) <- ps.activityResources
+            if rscId == resourceId
+            actMgr <- ps.activityMgrs.get(actId)
+          } actMgr ! ActivityMgr.Cancel
+
+          val newState = ps.copy(resourceMgrs = newResourceMgrs, status = Status.Failed)
+
+          if (terminateWhenComplete(ctx, database, newState)) Behaviors.stopped
+          else active(ctx, database, orchardSettings, newState)
+        } else {
+          ctx.log.info(
+            s"${ctx.self} (active) ignoring ResourceMgrDied($resourceId) after clean ResourceTerminated"
+          )
+          Behaviors.same
+        }
 
       case ActionCompleted =>
         ctx.log.info(s"${ctx.self} (active) received ActionCompleted")
