@@ -21,7 +21,8 @@ import com.salesforce.mce.orchard.model.{ActionCondition, ActionStatus, Status, 
 
 class OrchardDatabase(conf: Config) {
 
-  val connection: Database = Database.forConfig("slick", conf)
+  // lazy so a test double can override `sync`/`async` without a live connection being opened
+  lazy val connection: Database = Database.forConfig("slick", conf)
 
   // TODO need to also validate if the workflow ID already exists within a transaction
   def createWorkflow(workflow: Workflow)(implicit ec: ExecutionContext): Future[String] = {
