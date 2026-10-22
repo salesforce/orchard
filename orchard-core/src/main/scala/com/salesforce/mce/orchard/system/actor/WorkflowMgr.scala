@@ -111,10 +111,13 @@ object WorkflowMgr {
         val activityMgrs = ps.activityMgrs - activityId
         val newActivityResources = ps.activityResources - activityId
 
-        val rscId = ps.activityResources(activityId)
-        // if no other activities depend on the resource, we can shut it down
-        if (!newActivityResources.values.toSet.contains(rscId)) {
-          ps.resourceMgrs(rscId) ! ResourceMgr.Shutdown(Status.Finished)
+        // If no other activities depend on the resource, we can shut it down. Look the keys up
+        // rather than map-applying: a resource or activity entry may already be gone (e.g. after an
+        // out-of-order completion), and an unguarded apply would throw NoSuchElementException.
+        ps.activityResources.get(activityId).foreach { rscId =>
+          if (!newActivityResources.values.toSet.contains(rscId)) {
+            ps.resourceMgrs.get(rscId).foreach(_ ! ResourceMgr.Shutdown(Status.Finished))
+          }
         }
 
         val newState = scheduleNextActivities(
