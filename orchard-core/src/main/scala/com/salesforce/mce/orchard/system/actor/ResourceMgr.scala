@@ -23,13 +23,23 @@ object ResourceMgr {
 
   sealed trait Msg
 
+  // Outcome of the provider teardown a ResourceInstance attempts before it reports completion. Lets the
+  // manager tell a clean teardown apart from one where the cluster may still be alive, instead of
+  // recording every completion as a clean finish.
+  sealed trait Teardown
+  object Teardown {
+    case object Terminated extends Teardown
+    case object TerminateFailed extends Teardown
+  }
+
   case class GetResourceInstSpec(replyTo: ActorRef[ResourceInstSpecRsp]) extends Msg
   case class CreateResourceInst(replyTo: ActorRef[ResourceInstSpecRsp], instId: Int) extends Msg
   case class ResourceInstSpecRsp(spec: Either[Status.Value, (Int, JsValue)])
-  case class ResourceInstanceFinished(status: Status.Value) extends Msg
+  case class ResourceInstanceFinished(instId: Int, status: Status.Value, teardown: Teardown) extends Msg
   case class InactiveResourceInstance(
     instanceId: Int,
     status: Status.Value,
+    teardown: Teardown,
     replyTo: ActorRef[ResourceInstSpecRsp]
   ) extends Msg
   // the shutdown call from WorkflowMgr, ResourceMgr should never shutdown unless told by WFMgr
@@ -194,20 +204,22 @@ object ResourceMgr {
           s"${ps.ctx.self} (running) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
         )
         Behaviors.unhandled
-      case ResourceInstanceFinished(Status.Timeout) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(Timeout)")
+      case ResourceInstanceFinished(instId, Status.Timeout, teardown) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (running) received ResourceInstanceFinished(inst-$instId, Timeout)")
+        logIfLeaked(ps, instId, teardown)
         ps.database.sync(ps.resourceQuery.setTerminated(Status.Timeout))
         finished(ps, Status.Timeout)
       // resource should not receive finished status during "running" state other than Timeout
-      case ResourceInstanceFinished(status) =>
+      case ResourceInstanceFinished(instId, status, _) =>
         ps.ctx.log.error(
-          s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished($status, None)"
+          s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $status)"
         )
         Behaviors.unhandled
-      case InactiveResourceInstance(instId, status, replyTo) =>
+      case InactiveResourceInstance(instId, status, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         // maybe the current instance is already a new one
         if (instId < currentInstId) {
           ps.ctx.self ! GetResourceInstSpec(replyTo)
@@ -252,20 +264,26 @@ object ResourceMgr {
             ps.ctx.self ! GetResourceInstSpec(replyTo)
             running(ps, resourceAttemptDelay, rscInst, instId)
         }
-      case ResourceInstanceFinished(status) =>
+      case ResourceInstanceFinished(instId, status, _) =>
         ps.ctx.log.error(
-          s"${ps.ctx.self} (waiting) received UNEXPECTED ResourceInstanceFinished($status)"
+          s"${ps.ctx.self} (waiting) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $status)"
         )
         Behaviors.unhandled
-      case InactiveResourceInstance(instId, status, replyTo) =>
+      case InactiveResourceInstance(instId, status, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (waiting) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
         Behaviors.same
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (waiting) received Shutdown($status)")
-        terminating(ps.ctx, ps, status)
+        // No instance is provisioned while waiting: the prior one already ran its teardown before
+        // going inactive, and the retry has not spawned yet. Complete directly rather than entering
+        // `terminating`, which here could never receive a ResourceInstanceFinished and would hang,
+        // so WorkflowMgr would never get its ResourceTerminated.
+        ps.database.sync(ps.resourceQuery.setTerminated(status))
+        terminate(ps, status)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (waiting) received signal $signal")
@@ -289,15 +307,16 @@ object ResourceMgr {
           s"${ps.ctx.self} (finished) received UNEXPECTED CreateResourceInst($replyTo, $instId)"
         )
         Behaviors.same
-      case ResourceInstanceFinished(sts) =>
+      case ResourceInstanceFinished(instId, sts, _) =>
         ps.ctx.log.error(
-          s"${ps.ctx.self} (finished) received UNEXPECTED ResourceInstanceFinished($sts)"
+          s"${ps.ctx.self} (finished) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $sts)"
         )
         Behaviors.same
-      case InactiveResourceInstance(instanceId, sts, replyTo) =>
+      case InactiveResourceInstance(instanceId, sts, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (finished) received InactiveResourceInstance($instanceId, $sts, $replyTo)"
         )
+        logIfLeaked(ps, instanceId, teardown)
         ps.ctx.self ! GetResourceInstSpec(replyTo)
         Behaviors.same
       case Shutdown(_) =>
@@ -324,14 +343,16 @@ object ResourceMgr {
           s"${ps.ctx.self} (terminating) received CreateResourceInst($replyTo, $instId)"
         )
         Behaviors.same
-      case ResourceInstanceFinished(sts) =>
-        ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished($sts)")
+      case ResourceInstanceFinished(instId, sts, teardown) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (terminating) received ResourceInstanceFinished(inst-$instId, $sts)")
+        logIfLeaked(ps, instId, teardown)
         ps.database.sync(ps.resourceQuery.setTerminated(status))
         terminate(ps, status)
-      case InactiveResourceInstance(instId, sts, replyTo) =>
+      case InactiveResourceInstance(instId, sts, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         ctx.self ! GetResourceInstSpec(replyTo)
         Behaviors.same
       case Shutdown(_) =>
@@ -350,6 +371,17 @@ object ResourceMgr {
     ps.workflowMgr ! WorkflowMgr.ResourceTerminated(ps.resourceId, status)
     Behaviors.stopped
   }
+
+  // A failed provider teardown is surfaced (so the leak is visible) but never blocks completion.
+  private def logIfLeaked(ps: Params, instId: Int, teardown: Teardown): Unit =
+    teardown match {
+      case Teardown.TerminateFailed =>
+        ps.ctx.log.error(
+          s"${ps.ctx.self} inst-$instId reported a failed provider teardown; resource may still be alive"
+        )
+      case Teardown.Terminated =>
+        ()
+    }
 
   def spawnResourceInstance(
     ctx: ActorContext[ResourceMgr.Msg],

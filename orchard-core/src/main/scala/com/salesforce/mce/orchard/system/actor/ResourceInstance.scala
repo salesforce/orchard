@@ -104,12 +104,14 @@ object ResourceInstance {
           case Left(exp) =>
             ps.ctx.log.error(s"${ps.ctx.self} (pending) Exception when creating resource", exp)
             ps.database.sync(ps.query.setTerminated(Status.Failed, exp.getMessage()))
-            terminate(ps, Status.Failed, Option(replyTo))
+            // nothing was provisioned, so there is nothing to tear down
+            terminate(ps, Status.Failed, Option(replyTo), ResourceMgr.Teardown.Terminated)
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (pending) received Shutdown($status)")
         ps.database.sync(ps.query.setTerminated(status, ""))
-        terminate(ps, status, None)
+        // nothing was provisioned, so there is nothing to tear down
+        terminate(ps, status, None, ResourceMgr.Teardown.Terminated)
     }
     .receiveSignal { case (actorContext, signal) =>
       ps.ctx.log.info(s"${actorContext.self} (pending) received signal $signal")
@@ -162,10 +164,14 @@ object ResourceInstance {
               s"${ps.ctx.self} (running) received resource status $sts, shutting down"
             )
             shuttingDown(ps, instSpec, sts, Option(replyTo))
-          case sts =>
-            ps.ctx.log.error(s"${ps.ctx.self} (running) UNEXPECTED resource status $sts")
-            ps.database.sync(ps.query.setTerminated(Status.Failed, ""))
-            terminate(ps, Status.Failed, Option(replyTo))
+          case Left(exp) =>
+            // getStatus failed (e.g. a transient provider error): shut down so teardown is still
+            // attempted and reported, rather than parking a possibly-live resource as inactive.
+            ps.ctx.log.info(
+              s"${ps.ctx.self} (running) getStatus failed, shutting down to attempt teardown",
+              exp
+            )
+            shuttingDown(ps, instSpec, Status.Failed, Option(replyTo))
         }
       case Shutdown(status) =>
         ps.ctx.log.info(s"${ps.ctx.self} (running) received Shutdown($status)")
@@ -182,14 +188,17 @@ object ResourceInstance {
     status: Status.Value,
     replyTo: Option[ActorRef[ResourceMgr.ResourceInstSpecRsp]]
   ): Behavior[Msg] = {
-    val errorMsg = ps.resourceIO.terminate(instSpec) match {
-      case Right(sts) =>
-        ""
+    // Record the real teardown outcome instead of always reporting a clean finish: on a Left the
+    // resource may still be alive, and the completion carries that so the manager can surface it.
+    val (teardown, errorMsg) = ps.resourceIO.terminate(instSpec) match {
+      case Right(_) =>
+        (ResourceMgr.Teardown.Terminated, "")
       case Left(exp) =>
         ps.ctx.log.error(
-          s"Actor ${ps.ctx.self} Unable to terminate resource instance with exception ${exp}"
+          s"Actor ${ps.ctx.self} unable to terminate resource instance; resource may still be alive",
+          exp
         )
-        exp.getMessage()
+        (ResourceMgr.Teardown.TerminateFailed, exp.getMessage())
     }
 
     // a) Proper resource termination msg after finished status should come from ResourceMgr that does not expect reply.
@@ -198,33 +207,46 @@ object ResourceInstance {
     // c) resource could terminate normally by external users, and should be marked as failed.
     val failureStatus = if (replyTo.nonEmpty && status == Status.Finished) Status.Failed else status
     ps.database.sync(ps.query.setTerminated(failureStatus, errorMsg))
-    terminate(ps, failureStatus, replyTo)
+    terminate(ps, failureStatus, replyTo, teardown)
   }
 
   // We should not terminate resource instance actor as it may need to respond to pending queries
   // from activity attempts in the mailbox
-  private def inactive(ps: Params, status: Status.Value): Behavior[Msg] = Behaviors.receiveMessage {
-    case GetResourceInstSpec(replyTo) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
-      ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, replyTo)
-      Behaviors.same
-    case Shutdown(sts) =>
-      ps.ctx.log.info(s"${ps.ctx.self} (inactive) received Shutdown($sts)")
-      Behaviors.same
+  private def inactive(
+    ps: Params,
+    status: Status.Value,
+    teardown: ResourceMgr.Teardown
+  ): Behavior[Msg] = {
+    // Teardown is done, so the terminate-after deadline is moot; cancel it to keep a stale
+    // Shutdown(Timeout) from firing here later.
+    ps.timers.cancel(Shutdown(Status.Timeout))
+    Behaviors.receiveMessage {
+      case GetResourceInstSpec(replyTo) =>
+        ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
+        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, teardown, replyTo)
+        Behaviors.same
+      case Shutdown(sts) =>
+        // Teardown already happened; re-report completion so a manager parked in `terminating`
+        // unblocks instead of waiting for a finish that would otherwise never arrive.
+        ps.ctx.log.info(s"${ps.ctx.self} (inactive) received Shutdown($sts); re-reporting finished")
+        ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(ps.instanceId, status, teardown)
+        Behaviors.same
+    }
   }
 
   private def terminate(
     ps: Params,
     status: Status.Value,
-    replyTo: Option[ActorRef[ResourceMgr.ResourceInstSpecRsp]]
+    replyTo: Option[ActorRef[ResourceMgr.ResourceInstSpecRsp]],
+    teardown: ResourceMgr.Teardown
   ): Behavior[Msg] = {
     replyTo match {
       case Some(r) =>
-        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, r)
+        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, teardown, r)
       case None =>
-        ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(status)
+        ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(ps.instanceId, status, teardown)
     }
-    inactive(ps, status)
+    inactive(ps, status, teardown)
   }
 
 }
