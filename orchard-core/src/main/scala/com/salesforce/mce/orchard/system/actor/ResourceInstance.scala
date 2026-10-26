@@ -223,7 +223,7 @@ object ResourceInstance {
     Behaviors.receiveMessage {
       case GetResourceInstSpec(replyTo) =>
         ps.ctx.log.info(s"${ps.ctx.self} (inactive) received GetResourceInstSpec($replyTo)")
-        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, replyTo)
+        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, teardown, replyTo)
         Behaviors.same
       case Shutdown(sts) =>
         // Teardown already happened; re-report completion so a manager parked in `terminating`
@@ -242,7 +242,7 @@ object ResourceInstance {
   ): Behavior[Msg] = {
     replyTo match {
       case Some(r) =>
-        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, r)
+        ps.resourceMgr ! ResourceMgr.InactiveResourceInstance(ps.instanceId, status, teardown, r)
       case None =>
         ps.resourceMgr ! ResourceMgr.ResourceInstanceFinished(ps.instanceId, status, teardown)
     }

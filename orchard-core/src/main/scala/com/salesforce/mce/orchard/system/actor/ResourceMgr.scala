@@ -39,6 +39,7 @@ object ResourceMgr {
   case class InactiveResourceInstance(
     instanceId: Int,
     status: Status.Value,
+    teardown: Teardown,
     replyTo: ActorRef[ResourceInstSpecRsp]
   ) extends Msg
   // the shutdown call from WorkflowMgr, ResourceMgr should never shutdown unless told by WFMgr
@@ -214,10 +215,11 @@ object ResourceMgr {
           s"${ps.ctx.self} (running) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $status)"
         )
         Behaviors.unhandled
-      case InactiveResourceInstance(instId, status, replyTo) =>
+      case InactiveResourceInstance(instId, status, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (running) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         // maybe the current instance is already a new one
         if (instId < currentInstId) {
           ps.ctx.self ! GetResourceInstSpec(replyTo)
@@ -267,10 +269,11 @@ object ResourceMgr {
           s"${ps.ctx.self} (waiting) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $status)"
         )
         Behaviors.unhandled
-      case InactiveResourceInstance(instId, status, replyTo) =>
+      case InactiveResourceInstance(instId, status, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (waiting) received InactiveResourceInstance($instId, $status, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         ps.timers.startSingleTimer(GetResourceInstSpec(replyTo), 10.seconds)
         Behaviors.same
       case Shutdown(status) =>
@@ -309,10 +312,11 @@ object ResourceMgr {
           s"${ps.ctx.self} (finished) received UNEXPECTED ResourceInstanceFinished(inst-$instId, $sts)"
         )
         Behaviors.same
-      case InactiveResourceInstance(instanceId, sts, replyTo) =>
+      case InactiveResourceInstance(instanceId, sts, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (finished) received InactiveResourceInstance($instanceId, $sts, $replyTo)"
         )
+        logIfLeaked(ps, instanceId, teardown)
         ps.ctx.self ! GetResourceInstSpec(replyTo)
         Behaviors.same
       case Shutdown(_) =>
@@ -344,10 +348,11 @@ object ResourceMgr {
         logIfLeaked(ps, instId, teardown)
         ps.database.sync(ps.resourceQuery.setTerminated(status))
         terminate(ps, status)
-      case InactiveResourceInstance(instId, sts, replyTo) =>
+      case InactiveResourceInstance(instId, sts, teardown, replyTo) =>
         ps.ctx.log.info(
           s"${ps.ctx.self} (terminating) received InactiveResourceInstance($instId, $sts, $replyTo)"
         )
+        logIfLeaked(ps, instId, teardown)
         ctx.self ! GetResourceInstSpec(replyTo)
         Behaviors.same
       case Shutdown(_) =>

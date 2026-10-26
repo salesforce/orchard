@@ -160,8 +160,36 @@ class ResourceInstanceSpec extends ScalaTestWithActorTestKit with AnyWordSpecLik
 
       ri ! ResourceInstance.GetResourceInstSpec(replyTo.ref)
 
-      mgr.expectMessage(ResourceMgr.InactiveResourceInstance(InstId, Status.Failed, replyTo.ref))
+      mgr.expectMessage(
+        ResourceMgr.InactiveResourceInstance(
+          InstId,
+          Status.Failed,
+          ResourceMgr.Teardown.Terminated,
+          replyTo.ref
+        )
+      )
       io.getStatusCount shouldBe 1
+      io.terminateCount shouldBe 1
+    }
+
+    "carry TerminateFailed to the manager when both getStatus and teardown fail" in {
+      val io = new StubResourceIO(
+        Left(new RuntimeException("throttled")),
+        Left(new RuntimeException("provider down"))
+      )
+      val (mgr, ri) = spawnRunningInstance(io)
+      val replyTo = createTestProbe[ResourceMgr.ResourceInstSpecRsp]()
+
+      ri ! ResourceInstance.GetResourceInstSpec(replyTo.ref)
+
+      mgr.expectMessage(
+        ResourceMgr.InactiveResourceInstance(
+          InstId,
+          Status.Failed,
+          ResourceMgr.Teardown.TerminateFailed,
+          replyTo.ref
+        )
+      )
       io.terminateCount shouldBe 1
     }
 
