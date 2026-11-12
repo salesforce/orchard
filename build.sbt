@@ -93,6 +93,7 @@ lazy val orchardWS = (project in file("orchard-ws")).
       logback
     ),
     dependencyOverrides ++= Seq(
+      "com.google.guava" % "guava" % "33.8.0-jre",
       // the transitive jackson dependencies from play framework on has security vulnerabilities
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % jacksonVersion,
       "com.fasterxml.jackson.dataformat" % "jackson-dataformat-cbor" % jacksonVersion,
