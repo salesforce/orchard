@@ -87,7 +87,11 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
       case Left(exp: EmrException) if exp.isThrottlingException =>
         // A throttled status query does not mean the submitted steps failed. Let the activity
         // actor use its normal polling delay; resource deadlines and cancellation still apply.
-        logger.warn(s"Deferring progress check after EMR throttling for cluster $clusterId", exp)
+        logger.warn(
+          "Deferring progress check after EMR throttling for cluster {}: {}",
+          clusterId,
+          exp.toString
+        )
         Right(Status.Running)
       case result => result
     }
