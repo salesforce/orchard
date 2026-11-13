@@ -9,7 +9,9 @@ package com.salesforce.mce.orchard.io.aws.activity
 
 import scala.jdk.CollectionConverters._
 
+import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsResult, JsValue, Json, Reads}
+import software.amazon.awssdk.services.emr.EmrClient
 import software.amazon.awssdk.services.emr.model._
 
 import com.salesforce.mce.orchard.io.ActivityIO
@@ -20,6 +22,8 @@ import com.salesforce.mce.orchard.util.RetryHelper._
 
 case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: String)
     extends ActivityIO {
+
+  private val logger = LoggerFactory.getLogger(getClass)
 
   override def create(): Either[Throwable, JsValue] = retryToEither {
     val response = Client
@@ -51,8 +55,10 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
     Json.toJson(stepIds)
   }
 
-  private def getProgress(steps: Seq[String]): Either[Throwable, Status.Value] = {
-    val client = Client.emr()
+  private[activity] def getProgress(
+    steps: Seq[String],
+    client: EmrClient = Client.emr()
+  ): Either[Throwable, Status.Value] = {
     val statuses = retryToEither {
       steps
         .map { stepId =>
@@ -64,7 +70,7 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
         }
     }
 
-    statuses.map { ss =>
+    val progress = statuses.map { ss =>
       if (ss.forall(ss => ss == StepState.COMPLETED)) {
         Status.Finished
       } else if (ss.contains(StepState.FAILED)) {
@@ -75,6 +81,15 @@ case class EmrActivity(name: String, steps: Seq[EmrActivity.Step], clusterId: St
       } else {
         Status.Running
       }
+    }
+
+    progress match {
+      case Left(exp: EmrException) if exp.isThrottlingException =>
+        // A throttled status query does not mean the submitted steps failed. Let the activity
+        // actor use its normal polling delay; resource deadlines and cancellation still apply.
+        logger.warn(s"Deferring progress check after EMR throttling for cluster $clusterId", exp)
+        Right(Status.Running)
+      case result => result
     }
   }
 
