@@ -78,29 +78,31 @@ object Client {
   def emr(): EmrClient = {
 
     val settings = ProviderSettings()
-    val retryStrategy = AwsRetryStrategy
-      .standardRetryStrategy()
-      .toBuilder
-      .maxAttempts(settings.emrRetryMaxAttempts)
-      .backoffStrategy(
-        BackoffStrategy.exponentialDelay(settings.emrRetryBaseDelay, settings.emrRetryMaxBackoff)
-      )
-      .throttlingBackoffStrategy(
-        BackoffStrategy.exponentialDelay(
-          settings.emrThrottlingBaseDelay,
-          settings.emrThrottlingMaxBackoff
-        )
-      )
-      .build()
-    val overrides = ClientOverrideConfiguration
-      .builder()
-      .retryStrategy(retryStrategy)
-      .apiCallTimeout(settings.emrApiCallTimeout)
-      .build()
-
     val clientBuilder = clientRegionOpt
       .foldLeft(EmrClient.builder())(_.region(_))
-      .overrideConfiguration(overrides)
+
+    if (settings.emrRetryEnabled) {
+      val retryStrategy = AwsRetryStrategy
+        .standardRetryStrategy()
+        .toBuilder
+        .maxAttempts(settings.emrRetryMaxAttempts)
+        .backoffStrategy(
+          BackoffStrategy.exponentialDelay(settings.emrRetryBaseDelay, settings.emrRetryMaxBackoff)
+        )
+        .throttlingBackoffStrategy(
+          BackoffStrategy.exponentialDelay(
+            settings.emrThrottlingBaseDelay,
+            settings.emrThrottlingMaxBackoff
+          )
+        )
+        .build()
+      val overrides = ClientOverrideConfiguration
+        .builder()
+        .retryStrategy(retryStrategy)
+        .apiCallTimeout(settings.emrApiCallTimeout)
+        .build()
+      clientBuilder.overrideConfiguration(overrides)
+    }
 
     assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>

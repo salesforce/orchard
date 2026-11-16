@@ -21,6 +21,7 @@ case class ProviderSettings(config: Config) {
   lazy val awsClientRegion = getConfigString("aws.client.region")
   lazy val awsAssumeRoleArn = getConfigString("aws.assume.role.arn")
 
+  lazy val emrRetryEnabled = config.getBoolean("aws.client.emr.retry.enabled")
   lazy val emrRetryMaxAttempts = config.getInt("aws.client.emr.retry.maxAttempts")
   lazy val emrRetryBaseDelay = config.getDuration("aws.client.emr.retry.baseDelay")
   lazy val emrRetryMaxBackoff = config.getDuration("aws.client.emr.retry.maxBackoff")
