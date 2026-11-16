@@ -20,6 +20,13 @@ case class ProviderSettings(config: Config) {
   lazy val awsSecretKey = getConfigString("aws.static.credentials.secretKey")
   lazy val awsClientRegion = getConfigString("aws.client.region")
   lazy val awsAssumeRoleArn = getConfigString("aws.assume.role.arn")
+
+  lazy val emrRetryMaxAttempts = config.getInt("aws.client.emr.retry.maxAttempts")
+  lazy val emrRetryBaseDelay = config.getDuration("aws.client.emr.retry.baseDelay")
+  lazy val emrRetryMaxBackoff = config.getDuration("aws.client.emr.retry.maxBackoff")
+  lazy val emrThrottlingBaseDelay = config.getDuration("aws.client.emr.retry.throttlingBaseDelay")
+  lazy val emrThrottlingMaxBackoff = config.getDuration("aws.client.emr.retry.throttlingMaxBackoff")
+  lazy val emrApiCallTimeout = config.getDuration("aws.client.emr.apiCallTimeout")
 }
 
 object ProviderSettings {
