@@ -8,7 +8,10 @@
 package com.salesforce.mce.orchard.io.aws
 
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
+import software.amazon.awssdk.awscore.retry.AwsRetryStrategy
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
 import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.retries.api.BackoffStrategy
 import software.amazon.awssdk.services.ec2.Ec2Client
 import software.amazon.awssdk.services.emr.EmrClient
 import software.amazon.awssdk.services.sns.SnsClient
@@ -74,8 +77,32 @@ object Client {
 
   def emr(): EmrClient = {
 
+    val settings = ProviderSettings()
     val clientBuilder = clientRegionOpt
       .foldLeft(EmrClient.builder())(_.region(_))
+
+    if (settings.emrRetryEnabled) {
+      val retryStrategy = AwsRetryStrategy
+        .standardRetryStrategy()
+        .toBuilder
+        .maxAttempts(settings.emrRetryMaxAttempts)
+        .backoffStrategy(
+          BackoffStrategy.exponentialDelay(settings.emrRetryBaseDelay, settings.emrRetryMaxBackoff)
+        )
+        .throttlingBackoffStrategy(
+          BackoffStrategy.exponentialDelay(
+            settings.emrThrottlingBaseDelay,
+            settings.emrThrottlingMaxBackoff
+          )
+        )
+        .build()
+      val overrides = ClientOverrideConfiguration
+        .builder()
+        .retryStrategy(retryStrategy)
+        .apiCallTimeout(settings.emrApiCallTimeout)
+        .build()
+      clientBuilder.overrideConfiguration(overrides)
+    }
 
     assumeRoleCredentialsOpt(EmrClient.SERVICE_NAME) match {
       case Some(stsAssumeRoleCredentials) =>
